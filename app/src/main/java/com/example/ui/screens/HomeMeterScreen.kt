@@ -43,6 +43,7 @@ import com.example.data.database.TripEntity
 import com.example.data.model.DispatchOrder
 import com.example.data.model.TripState
 import com.example.data.model.TripStatus
+import com.example.ui.components.AdminAuthPinModal
 import com.example.ui.components.SpeedometerGauge
 import com.example.ui.components.TripDispatchAlertModal
 import com.example.ui.components.TripMapView
@@ -59,6 +60,7 @@ fun HomeMeterScreen(
     viewModel: MeterViewModel,
     dispatchViewModel: DispatchViewModel,
     onNavigateToSettings: () -> Unit,
+    onNavigateToProfile: () -> Unit,
     onNavigateToReceipt: (Int) -> Unit
 ) {
     val context = LocalContext.current
@@ -69,8 +71,11 @@ fun HomeMeterScreen(
     val currentRole by dispatchViewModel.currentRole.collectAsStateWithLifecycle()
     val activeAlertTrip by dispatchViewModel.activeAlertTrip.collectAsStateWithLifecycle()
     val broadcastMessage by dispatchViewModel.driverBroadcastMessage.collectAsStateWithLifecycle()
+    val driverProfile by dispatchViewModel.driverProfile.collectAsStateWithLifecycle()
+    val isDispatcherAuthenticated by dispatchViewModel.isDispatcherAuthenticated.collectAsStateWithLifecycle()
 
     var acceptedTripDetails by remember { mutableStateOf<DispatchOrder?>(null) }
+    var showAdminAuthModal by remember { mutableStateOf(false) }
 
     val brandRed = Color(0xFFC62828)
 
@@ -172,9 +177,27 @@ fun HomeMeterScreen(
                     }
                 },
                 actions = {
-                    // Role Switch Button
+                    // Driver Profile Button
+                    IconButton(
+                        onClick = onNavigateToProfile,
+                        modifier = Modifier.testTag("driver_profile_button")
+                    ) {
+                        Icon(
+                            imageVector = Icons.Default.Badge,
+                            contentDescription = "Driver Profile",
+                            tint = Color.White
+                        )
+                    }
+
+                    // Role Switch Button with Admin Security Check
                     Button(
-                        onClick = { dispatchViewModel.setRole(AppRole.DISPATCHER) },
+                        onClick = {
+                            if (isDispatcherAuthenticated) {
+                                dispatchViewModel.setRole(AppRole.DISPATCHER)
+                            } else {
+                                showAdminAuthModal = true
+                            }
+                        },
                         colors = ButtonDefaults.buttonColors(
                             containerColor = Color.White,
                             contentColor = brandRed
@@ -227,6 +250,80 @@ fun HomeMeterScreen(
                 .padding(horizontal = 16.dp)
                 .verticalScroll(rememberScrollState())
         ) {
+            // ADMIN PIN MODAL DIALOG
+            if (showAdminAuthModal) {
+                AdminAuthPinModal(
+                    onDismiss = { showAdminAuthModal = false },
+                    onPinSuccess = {
+                        showAdminAuthModal = false
+                    },
+                    onVerifyPin = { pin ->
+                        dispatchViewModel.verifyAdminPin(pin)
+                    }
+                )
+            }
+
+            // DRIVER ASSIGNED ID BANNER CARD
+            Card(
+                colors = CardDefaults.cardColors(containerColor = Color.White),
+                shape = RoundedCornerShape(18.dp),
+                elevation = CardDefaults.cardElevation(defaultElevation = 6.dp),
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(top = 12.dp, bottom = 4.dp)
+                    .clickable { onNavigateToProfile() }
+            ) {
+                Row(
+                    modifier = Modifier
+                        .padding(14.dp)
+                        .fillMaxWidth(),
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        Surface(
+                            color = Color(0xFFFFD600),
+                            shape = RoundedCornerShape(12.dp)
+                        ) {
+                            Text(
+                                text = driverProfile.driverId,
+                                fontWeight = FontWeight.Black,
+                                fontSize = 14.sp,
+                                color = Color.Black,
+                                modifier = Modifier.padding(horizontal = 10.dp, vertical = 6.dp)
+                            )
+                        }
+                        Spacer(modifier = Modifier.width(10.dp))
+                        Column {
+                            Text(
+                                text = driverProfile.driverName,
+                                fontWeight = FontWeight.Bold,
+                                fontSize = 14.sp,
+                                color = Color(0xFF1E1E1E)
+                            )
+                            Text(
+                                text = "Plate: ${driverProfile.vehiclePlate} • ${driverProfile.phoneNumber}",
+                                fontSize = 11.sp,
+                                color = Color.Gray
+                            )
+                        }
+                    }
+
+                    Surface(
+                        color = Color(0xFFFFEBEE),
+                        shape = RoundedCornerShape(10.dp)
+                    ) {
+                        Text(
+                            text = "PROFILE",
+                            color = brandRed,
+                            fontSize = 10.sp,
+                            fontWeight = FontWeight.Black,
+                            modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp)
+                        )
+                    }
+                }
+            }
+
             // Dispatcher Announcement Banner
             if (broadcastMessage != null) {
                 Card(

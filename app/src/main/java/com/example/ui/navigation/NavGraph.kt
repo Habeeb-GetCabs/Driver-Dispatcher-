@@ -7,6 +7,7 @@ import androidx.navigation.NavHostController
 import androidx.navigation.compose.NavHost
 import androidx.navigation.compose.composable
 import androidx.navigation.compose.rememberNavController
+import com.example.ui.screens.DriverProfileScreen
 import com.example.ui.screens.HomeMeterScreen
 import com.example.ui.screens.SettingsScreen
 import com.example.ui.screens.SplashScreen
@@ -42,7 +43,15 @@ fun GetTaxiNavGraph(
                 viewModel = meterViewModel,
                 dispatchViewModel = dispatchViewModel,
                 onNavigateToSettings = { navController.navigate("settings") },
+                onNavigateToProfile = { navController.navigate("profile") },
                 onNavigateToReceipt = { tripId -> navController.navigate("receipt/$tripId") }
+            )
+        }
+
+        composable("profile") {
+            DriverProfileScreen(
+                dispatchViewModel = dispatchViewModel,
+                onNavigateBack = { navController.popBackStack() }
             )
         }
 
