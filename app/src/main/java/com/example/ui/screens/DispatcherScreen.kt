@@ -257,23 +257,6 @@ fun DispatcherScreen(
 
                                     HorizontalDivider(color = Color(0xFFEEEEEE))
 
-                                    // Quick Pickup Presets
-                                    Text(
-                                        text = "QUICK PICKUP PRESETS",
-                                        fontSize = 11.sp,
-                                        fontWeight = FontWeight.Bold,
-                                        color = redBrand
-                                    )
-
-                                    Row(
-                                        horizontalArrangement = Arrangement.spacedBy(6.dp),
-                                        modifier = Modifier.fillMaxWidth()
-                                    ) {
-                                        PresetChip("Airport T1", onClick = { pickupAddress = "Airport Terminal 1" })
-                                        PresetChip("Central Station", onClick = { pickupAddress = "Central Station Platform A" })
-                                        PresetChip("Grand Hotel", onClick = { pickupAddress = "Grand Hotel Entrance" })
-                                    }
-
                                     // Pickup & Dropoff Text Fields
                                     OutlinedTextField(
                                         value = pickupAddress,
@@ -781,6 +764,9 @@ fun DispatcherScreen(
                     Text("Battery Level: ${d.batteryPercent}%", color = Color(0xFF1E1E1E))
                     Text("Last Known Location: ${d.lastLocation}", color = Color.Gray)
 
+                    val driverLat = d.latitude ?: selfProfile.latitude ?: 37.7749
+                    val driverLng = d.longitude ?: selfProfile.longitude ?: -122.4194
+
                     Spacer(modifier = Modifier.height(8.dp))
                     Text("LIVE GPS LOCATION", fontWeight = FontWeight.Bold, fontSize = 11.sp, color = redBrand)
                     // Live Location Map Box
@@ -792,8 +778,8 @@ fun DispatcherScreen(
                     ) {
                         TripMapView(
                             tripState = com.example.data.model.TripState(
-                                latitude = 37.7749,
-                                longitude = -122.4194,
+                                latitude = driverLat,
+                                longitude = driverLng,
                                 status = com.example.data.model.TripStatus.RUNNING
                             ),
                             modifier = Modifier.fillMaxSize()

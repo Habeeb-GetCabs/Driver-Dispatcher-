@@ -8,10 +8,13 @@ import com.example.data.model.DriverUnit
 import com.google.firebase.database.DataSnapshot
 import com.google.firebase.database.DatabaseError
 import com.google.firebase.database.FirebaseDatabase
+import com.google.firebase.database.MutableData
+import com.google.firebase.database.Transaction
 import com.google.firebase.database.ValueEventListener
 import kotlinx.coroutines.channels.awaitClose
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.callbackFlow
+import java.util.Locale
 
 object FirebaseSyncManager {
     private const val TAG = "FirebaseSyncManager"
@@ -30,10 +33,12 @@ object FirebaseSyncManager {
     private val ordersRef by lazy { database.getReference("dispatch_orders") }
 
     /**
-     * Publish or update driver profile to Firebase Realtime Database so other devices can see it in Dispatcher fleet.
+     * Publish or update driver profile to Firebase Realtime Database including GPS coordinates under /drivers/{driverId}/location.
      */
     fun syncDriverProfile(profile: DriverProfile) {
         if (profile.driverId.isBlank()) return
+        val lat = profile.latitude ?: 0.0
+        val lng = profile.longitude ?: 0.0
         val driverMap = mapOf(
             "driverId" to profile.driverId,
             "driverName" to profile.driverName,
@@ -42,11 +47,21 @@ object FirebaseSyncManager {
             "vehicleModel" to profile.vehicleModel,
             "status" to profile.status,
             "isOnline" to profile.isOnline,
+            "latitude" to lat,
+            "longitude" to lng,
             "lastLocationName" to profile.lastLocationName,
             "batteryPercent" to profile.batteryPercent,
             "fleetNetworkCode" to profile.fleetNetworkCode,
             "lastUpdatedTimestamp" to System.currentTimeMillis()
         )
+        
+        val locationMap = mapOf(
+            "latitude" to lat,
+            "longitude" to lng,
+            "lastLocationName" to profile.lastLocationName,
+            "timestamp" to System.currentTimeMillis()
+        )
+
         driversRef.child(profile.driverId).setValue(driverMap)
             .addOnSuccessListener {
                 Log.d(TAG, "Driver profile successfully synced to Firebase: ${profile.driverId}")
@@ -54,6 +69,30 @@ object FirebaseSyncManager {
             .addOnFailureListener { e ->
                 Log.e(TAG, "Failed to sync driver profile to Firebase: ${e.message}", e)
             }
+
+        driversRef.child(profile.driverId).child("location").setValue(locationMap)
+    }
+
+    /**
+     * Update driver location specifically on GPS position fix.
+     */
+    fun updateDriverLocation(driverId: String, lat: Double, lng: Double, locationName: String) {
+        if (driverId.isBlank()) return
+        val updates = mapOf(
+            "latitude" to lat,
+            "longitude" to lng,
+            "lastLocationName" to locationName,
+            "lastUpdatedTimestamp" to System.currentTimeMillis()
+        )
+        driversRef.child(driverId).updateChildren(updates)
+
+        val locationNode = mapOf(
+            "latitude" to lat,
+            "longitude" to lng,
+            "lastLocationName" to locationName,
+            "timestamp" to System.currentTimeMillis()
+        )
+        driversRef.child(driverId).child("location").setValue(locationNode)
     }
 
     /**
@@ -71,7 +110,22 @@ object FirebaseSyncManager {
                         val status = child.child("status").getValue(String::class.java) ?: "AVAILABLE"
                         val battery = child.child("batteryPercent").getValue(Long::class.java)?.toInt()
                             ?: child.child("batteryPercent").getValue(Int::class.java) ?: 95
-                        val location = child.child("lastLocationName").getValue(String::class.java) ?: "Active Depot"
+
+                        val lat = child.child("latitude").getValue(Double::class.java)
+                            ?: child.child("location").child("latitude").getValue(Double::class.java)
+                        val lng = child.child("longitude").getValue(Double::class.java)
+                            ?: child.child("location").child("longitude").getValue(Double::class.java)
+
+                        var rawLocName = child.child("lastLocationName").getValue(String::class.java)
+                            ?: child.child("location").child("lastLocationName").getValue(String::class.java) ?: ""
+
+                        if (rawLocName.isBlank() || rawLocName.contains("Depot", ignoreCase = true) || rawLocName == "GPS Active") {
+                            rawLocName = if (lat != null && lng != null && (lat != 0.0 || lng != 0.0)) {
+                                String.format(Locale.US, "GPS: %.4f, %.4f", lat, lng)
+                            } else {
+                                "GPS Locating..."
+                            }
+                        }
 
                         driversList.add(
                             DriverUnit(
@@ -80,7 +134,9 @@ object FirebaseSyncManager {
                                 vehiclePlate = plate,
                                 status = status,
                                 batteryPercent = battery,
-                                lastLocation = location
+                                lastLocation = rawLocName,
+                                latitude = lat,
+                                longitude = lng
                             )
                         )
                     } catch (e: Exception) {
@@ -118,8 +174,66 @@ object FirebaseSyncManager {
         ordersRef.child(order.orderId).setValue(orderMap)
     }
 
-    fun updateOrderStatus(orderId: String, status: DispatchStatus) {
-        ordersRef.child(orderId).child("status").setValue(status.name)
+    fun updateOrderStatus(orderId: String, status: DispatchStatus, assignedDriverId: String? = null) {
+        val updates = mutableMapOf<String, Any>(
+            "status" to status.name
+        )
+        if (assignedDriverId != null) {
+            updates["assignedDriverId"] = assignedDriverId
+        }
+        ordersRef.child(orderId).updateChildren(updates)
+    }
+
+    /**
+     * Single Acceptance Transaction to prevent race conditions when multiple drivers attempt to accept the same trip.
+     */
+    fun acceptTripTransaction(orderId: String, driverId: String, onResult: (Boolean, String?) -> Unit) {
+        val orderNode = ordersRef.child(orderId)
+        orderNode.runTransaction(object : Transaction.Handler {
+            override fun doTransaction(mutableData: MutableData): Transaction.Result {
+                val currentStatusStr = mutableData.child("status").getValue(String::class.java)
+                val currentAssigned = mutableData.child("assignedDriverId").getValue(String::class.java) ?: "ALL"
+
+                // If already accepted or in progress or completed, cancel this driver's transaction attempt
+                if (currentStatusStr == DispatchStatus.ACCEPTED.name ||
+                    currentStatusStr == DispatchStatus.IN_PROGRESS.name ||
+                    currentStatusStr == DispatchStatus.COMPLETED.name
+                ) {
+                    return Transaction.abort()
+                }
+
+                // If assigned to a specific driver that is NOT this driver, abort
+                if (currentAssigned != "ALL" && currentAssigned != driverId) {
+                    return Transaction.abort()
+                }
+
+                // Lock trip status to ACCEPTED and assign to this driver
+                mutableData.child("status").value = DispatchStatus.ACCEPTED.name
+                mutableData.child("assignedDriverId").value = driverId
+                mutableData.child("acceptedByDriverId").value = driverId
+                mutableData.child("acceptedTimestamp").value = System.currentTimeMillis()
+
+                return Transaction.success(mutableData)
+            }
+
+            override fun onComplete(
+                error: DatabaseError?,
+                committed: Boolean,
+                currentData: DataSnapshot?
+            ) {
+                if (committed) {
+                    Log.d(TAG, "Transaction successful! Order $orderId accepted by $driverId")
+                    onResult(true, null)
+                } else {
+                    val acceptedBy = currentData?.child("acceptedByDriverId")?.getValue(String::class.java)
+                        ?: currentData?.child("assignedDriverId")?.getValue(String::class.java)
+                        ?: "another driver"
+                    val msg = "Trip $orderId was already accepted by $acceptedBy"
+                    Log.w(TAG, "Transaction failed: $msg")
+                    onResult(false, msg)
+                }
+            }
+        })
     }
 
     fun observeDispatchOrders(): Flow<List<DispatchOrder>> = callbackFlow {

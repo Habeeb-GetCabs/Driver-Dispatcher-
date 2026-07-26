@@ -70,11 +70,11 @@ fun HomeMeterScreen(
 
     val currentRole by dispatchViewModel.currentRole.collectAsStateWithLifecycle()
     val activeAlertTrip by dispatchViewModel.activeAlertTrip.collectAsStateWithLifecycle()
+    val acceptedEnRouteTrip by dispatchViewModel.acceptedEnRouteTrip.collectAsStateWithLifecycle()
     val broadcastMessage by dispatchViewModel.driverBroadcastMessage.collectAsStateWithLifecycle()
     val driverProfile by dispatchViewModel.driverProfile.collectAsStateWithLifecycle()
     val isDispatcherAuthenticated by dispatchViewModel.isDispatcherAuthenticated.collectAsStateWithLifecycle()
 
-    var acceptedTripDetails by remember { mutableStateOf<DispatchOrder?>(null) }
     var showAdminAuthModal by remember { mutableStateOf(false) }
 
     val brandRed = Color(0xFFC62828)
@@ -120,9 +120,6 @@ fun HomeMeterScreen(
             currencySymbol = tripState.currency,
             onAccept = { order ->
                 dispatchViewModel.acceptTrip(order.orderId)
-                acceptedTripDetails = order
-                // Auto launch meter for driver
-                viewModel.startTrip()
             },
             onDecline = { order ->
                 dispatchViewModel.declineTrip(order.orderId)
@@ -367,56 +364,196 @@ fun HomeMeterScreen(
                 }
             }
 
-            // Accepted Dispatch Order Banner (Active Passenger)
-            if (acceptedTripDetails != null) {
+            // ACCEPTED / EN ROUTE TO PICKUP SCREEN CARD
+            if (acceptedEnRouteTrip != null) {
+                val order = acceptedEnRouteTrip!!
                 Card(
                     colors = CardDefaults.cardColors(containerColor = Color.White),
                     shape = RoundedCornerShape(20.dp),
+                    elevation = CardDefaults.cardElevation(defaultElevation = 8.dp),
                     modifier = Modifier
                         .fillMaxWidth()
-                        .padding(vertical = 8.dp)
+                        .padding(vertical = 10.dp)
                 ) {
-                    Column(modifier = Modifier.padding(16.dp)) {
+                    Column(
+                        modifier = Modifier.padding(18.dp),
+                        verticalArrangement = Arrangement.spacedBy(10.dp)
+                    ) {
+                        // Header Status
                         Row(
                             modifier = Modifier.fillMaxWidth(),
                             horizontalArrangement = Arrangement.SpaceBetween,
                             verticalAlignment = Alignment.CenterVertically
                         ) {
-                            Row(verticalAlignment = Alignment.CenterVertically) {
-                                Icon(Icons.Default.Assignment, contentDescription = null, tint = brandRed)
-                                Spacer(modifier = Modifier.width(6.dp))
+                            Surface(
+                                color = Color(0xFFE8F5E9),
+                                shape = RoundedCornerShape(12.dp)
+                            ) {
+                                Row(
+                                    modifier = Modifier.padding(horizontal = 10.dp, vertical = 6.dp),
+                                    verticalAlignment = Alignment.CenterVertically
+                                ) {
+                                    Icon(
+                                        imageVector = Icons.Default.DirectionsCar,
+                                        contentDescription = null,
+                                        tint = Color(0xFF2E7D32),
+                                        modifier = Modifier.size(16.dp)
+                                    )
+                                    Spacer(modifier = Modifier.width(6.dp))
+                                    Text(
+                                        text = "ACCEPTED / EN ROUTE TO PICKUP",
+                                        fontWeight = FontWeight.Black,
+                                        fontSize = 11.sp,
+                                        color = Color(0xFF2E7D32)
+                                    )
+                                }
+                            }
+
+                            Text(
+                                text = "#${order.orderId}",
+                                fontWeight = FontWeight.Bold,
+                                fontSize = 12.sp,
+                                color = Color.Gray
+                            )
+                        }
+
+                        HorizontalDivider(color = Color(0xFFEEEEEE))
+
+                        // Customer Details & Phone Call
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            horizontalArrangement = Arrangement.SpaceBetween,
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            Column(modifier = Modifier.weight(1f)) {
                                 Text(
-                                    text = "DISPATCH TRIP #${acceptedTripDetails?.orderId}",
+                                    text = "PASSENGER",
+                                    fontSize = 10.sp,
+                                    fontWeight = FontWeight.Bold,
+                                    color = Color.Gray
+                                )
+                                Text(
+                                    text = order.passengerName,
                                     fontWeight = FontWeight.Black,
-                                    fontSize = 14.sp,
+                                    fontSize = 16.sp,
+                                    color = Color(0xFF1E1E1E)
+                                )
+                                Text(
+                                    text = order.passengerPhone,
+                                    fontWeight = FontWeight.Bold,
+                                    fontSize = 13.sp,
                                     color = brandRed
                                 )
                             }
-                            IconButton(
-                                onClick = { acceptedTripDetails = null },
-                                modifier = Modifier.size(24.dp)
-                            ) {
-                                Icon(Icons.Default.Close, contentDescription = "Close", tint = Color.Gray)
+
+                            if (order.passengerPhone.isNotBlank()) {
+                                Button(
+                                    onClick = {
+                                        try {
+                                            val intent = android.content.Intent(
+                                                android.content.Intent.ACTION_DIAL,
+                                                android.net.Uri.parse("tel:${order.passengerPhone}")
+                                            )
+                                            context.startActivity(intent)
+                                        } catch (e: Exception) {
+                                            // Handle dialer error
+                                        }
+                                    },
+                                    colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF2E7D32)),
+                                    shape = RoundedCornerShape(12.dp),
+                                    contentPadding = PaddingValues(horizontal = 12.dp, vertical = 8.dp)
+                                ) {
+                                    Row(verticalAlignment = Alignment.CenterVertically) {
+                                        Icon(
+                                            Icons.Default.Phone,
+                                            contentDescription = "Call Customer",
+                                            tint = Color.White,
+                                            modifier = Modifier.size(16.dp)
+                                        )
+                                        Spacer(modifier = Modifier.width(6.dp))
+                                        Text("CALL", fontWeight = FontWeight.Bold, fontSize = 12.sp)
+                                    }
+                                }
                             }
                         }
 
-                        Spacer(modifier = Modifier.height(8.dp))
-                        Text(
-                            text = "Passenger: ${acceptedTripDetails?.passengerName} (${acceptedTripDetails?.passengerPhone})",
-                            fontWeight = FontWeight.Bold,
-                            fontSize = 14.sp,
-                            color = Color(0xFF1E1E1E)
-                        )
-                        Text(
-                            text = "📍 Pickup: ${acceptedTripDetails?.pickupAddress}",
-                            fontSize = 13.sp,
-                            color = Color(0xFF2E7D32)
-                        )
-                        Text(
-                            text = "🏁 Destination: ${acceptedTripDetails?.destinationAddress}",
-                            fontSize = 13.sp,
-                            color = brandRed
-                        )
+                        // Addresses
+                        Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                            Row(verticalAlignment = Alignment.CenterVertically) {
+                                Icon(Icons.Default.MyLocation, contentDescription = null, tint = Color(0xFF2E7D32), modifier = Modifier.size(18.dp))
+                                Spacer(modifier = Modifier.width(6.dp))
+                                Text(
+                                    text = "Pickup: ${order.pickupAddress}",
+                                    fontWeight = FontWeight.Bold,
+                                    fontSize = 13.sp,
+                                    color = Color(0xFF1E1E1E)
+                                )
+                            }
+                            Row(verticalAlignment = Alignment.CenterVertically) {
+                                Icon(Icons.Default.Place, contentDescription = null, tint = brandRed, modifier = Modifier.size(18.dp))
+                                Spacer(modifier = Modifier.width(6.dp))
+                                Text(
+                                    text = "Dropoff: ${order.destinationAddress}",
+                                    fontWeight = FontWeight.Medium,
+                                    fontSize = 13.sp,
+                                    color = Color(0xFF424242)
+                                )
+                            }
+                        }
+
+                        if (order.notes.isNotBlank()) {
+                            Surface(
+                                color = Color(0xFFFFF8E1),
+                                shape = RoundedCornerShape(8.dp),
+                                modifier = Modifier.fillMaxWidth()
+                            ) {
+                                Text(
+                                    text = "Note: ${order.notes}",
+                                    fontSize = 11.sp,
+                                    color = Color(0xFFE65100),
+                                    modifier = Modifier.padding(8.dp)
+                                )
+                            }
+                        }
+
+                        Spacer(modifier = Modifier.height(4.dp))
+
+                        // EXPLICIT TRIGGER BUTTON TO START TAXIMETER
+                        Button(
+                            onClick = {
+                                dispatchViewModel.startMeterForAcceptedTrip()
+                                viewModel.startTrip()
+                            },
+                            colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF2E7D32)),
+                            shape = RoundedCornerShape(16.dp),
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .height(52.dp)
+                                .testTag("arrived_start_meter_button")
+                        ) {
+                            Row(verticalAlignment = Alignment.CenterVertically) {
+                                Icon(
+                                    Icons.Default.PlayArrow,
+                                    contentDescription = null,
+                                    tint = Color.White,
+                                    modifier = Modifier.size(24.dp)
+                                )
+                                Spacer(modifier = Modifier.width(8.dp))
+                                Text(
+                                    text = "ARRIVED / START METER",
+                                    fontSize = 15.sp,
+                                    fontWeight = FontWeight.Black,
+                                    color = Color.White
+                                )
+                            }
+                        }
+
+                        TextButton(
+                            onClick = { dispatchViewModel.cancelAcceptedEnRouteTrip() },
+                            modifier = Modifier.align(Alignment.CenterHorizontally)
+                        ) {
+                            Text("Cancel Trip", color = Color.Gray, fontSize = 12.sp)
+                        }
                     }
                 }
             }

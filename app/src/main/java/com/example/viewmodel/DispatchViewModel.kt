@@ -46,6 +46,9 @@ class DispatchViewModel(application: Application) : AndroidViewModel(application
     private val _activeAlertTrip = MutableStateFlow<DispatchOrder?>(null)
     val activeAlertTrip: StateFlow<DispatchOrder?> = _activeAlertTrip.asStateFlow()
 
+    private val _acceptedEnRouteTrip = MutableStateFlow<DispatchOrder?>(null)
+    val acceptedEnRouteTrip: StateFlow<DispatchOrder?> = _acceptedEnRouteTrip.asStateFlow()
+
     private val _fleetDrivers = MutableStateFlow<List<DriverUnit>>(emptyList())
     val fleetDrivers: StateFlow<List<DriverUnit>> = _fleetDrivers.asStateFlow()
 
@@ -97,6 +100,21 @@ class DispatchViewModel(application: Application) : AndroidViewModel(application
                     if (remoteOrders.isNotEmpty()) {
                         _dispatchOrders.value = remoteOrders
                         val myDriverId = _driverProfile.value.driverId
+
+                        // Check if currently alerting trip was accepted by another driver
+                        val currentAlert = _activeAlertTrip.value
+                        if (currentAlert != null) {
+                            val updatedAlert = remoteOrders.find { it.orderId == currentAlert.orderId }
+                            if (updatedAlert != null &&
+                                (updatedAlert.status != DispatchStatus.DISPATCHED ||
+                                        (updatedAlert.assignedDriverId != "ALL" && updatedAlert.assignedDriverId != myDriverId))
+                            ) {
+                                // Dismiss alert modal on this device immediately!
+                                _activeAlertTrip.value = null
+                                _driverBroadcastMessage.value = "Trip #${currentAlert.orderId} was accepted by another driver."
+                            }
+                        }
+
                         val newDispatchedOrder = remoteOrders.firstOrNull { order ->
                             order.status == DispatchStatus.DISPATCHED &&
                                     (order.assignedDriverId == "ALL" || order.assignedDriverId == myDriverId) &&
@@ -273,18 +291,61 @@ class DispatchViewModel(application: Application) : AndroidViewModel(application
     }
 
     fun acceptTrip(orderId: String) {
-        _dispatchOrders.value = _dispatchOrders.value.map {
-            if (it.orderId == orderId) it.copy(status = DispatchStatus.ACCEPTED) else it
-        }
-        if (_activeAlertTrip.value?.orderId == orderId) {
-            _activeAlertTrip.value = null
-        }
+        val myDriverId = _driverProfile.value.driverId
         _currentRole.value = AppRole.DRIVER
 
-        try {
-            FirebaseSyncManager.updateOrderStatus(orderId, DispatchStatus.ACCEPTED)
-        } catch (e: Exception) {
-            Log.e("DispatchViewModel", "Failed to update order status to Firebase", e)
+        FirebaseSyncManager.acceptTripTransaction(orderId, myDriverId) { success, errorMsg ->
+            if (success) {
+                _activeAlertTrip.value = null
+                val targetOrder = _dispatchOrders.value.find { it.orderId == orderId }
+                val updatedOrder = (targetOrder ?: DispatchOrder(
+                    orderId = orderId,
+                    passengerName = "Passenger",
+                    passengerPhone = "+1 555-0192",
+                    pickupAddress = "Pickup Location",
+                    destinationAddress = "Destination",
+                    estimatedFare = 25.0
+                )).copy(status = DispatchStatus.ACCEPTED, assignedDriverId = myDriverId)
+
+                _dispatchOrders.value = _dispatchOrders.value.map {
+                    if (it.orderId == orderId) updatedOrder else it
+                }
+                _acceptedEnRouteTrip.value = updatedOrder
+                _driverBroadcastMessage.value = "Trip #${orderId} ACCEPTED! En route to pickup."
+            } else {
+                _activeAlertTrip.value = null
+                _driverBroadcastMessage.value = errorMsg ?: "Trip was already accepted by another driver."
+            }
+        }
+    }
+
+    fun startMeterForAcceptedTrip() {
+        val currentTrip = _acceptedEnRouteTrip.value
+        if (currentTrip != null) {
+            _dispatchOrders.value = _dispatchOrders.value.map {
+                if (it.orderId == currentTrip.orderId) it.copy(status = DispatchStatus.IN_PROGRESS) else it
+            }
+            try {
+                FirebaseSyncManager.updateOrderStatus(currentTrip.orderId, DispatchStatus.IN_PROGRESS)
+            } catch (e: Exception) {
+                Log.e("DispatchViewModel", "Failed to update order status to IN_PROGRESS", e)
+            }
+            _acceptedEnRouteTrip.value = null
+        }
+    }
+
+    fun cancelAcceptedEnRouteTrip() {
+        val currentTrip = _acceptedEnRouteTrip.value
+        if (currentTrip != null) {
+            _dispatchOrders.value = _dispatchOrders.value.map {
+                if (it.orderId == currentTrip.orderId) it.copy(status = DispatchStatus.DECLINED) else it
+            }
+            try {
+                FirebaseSyncManager.updateOrderStatus(currentTrip.orderId, DispatchStatus.DECLINED)
+            } catch (e: Exception) {
+                Log.e("DispatchViewModel", "Failed to cancel en route trip", e)
+            }
+            _acceptedEnRouteTrip.value = null
         }
     }
 

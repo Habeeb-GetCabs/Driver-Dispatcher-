@@ -27,5 +27,7 @@ data class DriverUnit(
     val vehiclePlate: String,
     val status: String, // "AVAILABLE", "ON_TRIP", "BUSY", "OFFLINE"
     val batteryPercent: Int = 95,
-    val lastLocation: String = "Downtown Central"
+    val lastLocation: String = "GPS Active",
+    val latitude: Double? = null,
+    val longitude: Double? = null
 )

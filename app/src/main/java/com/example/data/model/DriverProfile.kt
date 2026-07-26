@@ -11,7 +11,7 @@ data class DriverProfile(
     val status: String = "AVAILABLE", // "AVAILABLE", "ON_TRIP", "BUSY", "OFFLINE"
     val latitude: Double? = 37.7749,
     val longitude: Double? = -122.4194,
-    val lastLocationName: String = "Downtown Central Depot",
+    val lastLocationName: String = "GPS Active",
     val batteryPercent: Int = 98,
     val completedTripsCount: Int = 12,
     val rating: Double = 4.9,
