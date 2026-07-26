@@ -314,7 +314,9 @@ class DispatchViewModel(application: Application) : AndroidViewModel(application
         destination: String,
         estimatedFare: Double,
         notes: String,
-        assignedDriverId: String
+        assignedDriverId: String,
+        customBaseFare: Double = 0.0,
+        customRatePerKm: Double = 0.0
     ) {
         val adminName = _currentAdmin.value?.name ?: "Master Admin"
         val newOrder = DispatchOrder(
@@ -327,6 +329,8 @@ class DispatchViewModel(application: Application) : AndroidViewModel(application
             notes = notes,
             assignedDriverId = assignedDriverId,
             assignedByAdmin = adminName,
+            customBaseFare = customBaseFare,
+            customRatePerKm = customRatePerKm,
             status = DispatchStatus.DISPATCHED
         )
 

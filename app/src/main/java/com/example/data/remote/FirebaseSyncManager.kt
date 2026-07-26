@@ -100,6 +100,8 @@ object FirebaseSyncManager {
             "notes" to order.notes,
             "assignedDriverId" to order.assignedDriverId,
             "assignedByAdmin" to assignedByAdmin,
+            "customBaseFare" to order.customBaseFare,
+            "customRatePerKm" to order.customRatePerKm,
             "status" to order.status.name,
             "timestamp" to order.timestamp
         )
@@ -126,6 +128,8 @@ object FirebaseSyncManager {
                         val notes = child.child("notes").getValue(String::class.java) ?: ""
                         val assignedDriverId = child.child("assignedDriverId").getValue(String::class.java) ?: "ALL"
                         val assignedByAdmin = child.child("assignedByAdmin").getValue(String::class.java) ?: "Master Admin"
+                        val customBaseFare = child.child("customBaseFare").getValue(Double::class.java) ?: 0.0
+                        val customRatePerKm = child.child("customRatePerKm").getValue(Double::class.java) ?: 0.0
                         val statusStr = child.child("status").getValue(String::class.java) ?: DispatchStatus.DISPATCHED.name
                         val timestamp = child.child("timestamp").getValue(Long::class.java) ?: System.currentTimeMillis()
 
@@ -146,6 +150,8 @@ object FirebaseSyncManager {
                                 notes = notes,
                                 assignedDriverId = assignedDriverId,
                                 assignedByAdmin = assignedByAdmin,
+                                customBaseFare = customBaseFare,
+                                customRatePerKm = customRatePerKm,
                                 status = status,
                                 timestamp = timestamp
                             )
@@ -328,6 +334,9 @@ object FirebaseSyncManager {
             "estimatedFare" to order.estimatedFare,
             "notes" to order.notes,
             "assignedDriverId" to order.assignedDriverId,
+            "assignedByAdmin" to order.assignedByAdmin,
+            "customBaseFare" to order.customBaseFare,
+            "customRatePerKm" to order.customRatePerKm,
             "status" to order.status.name,
             "timestamp" to order.timestamp
         )
@@ -410,6 +419,9 @@ object FirebaseSyncManager {
                         val estimatedFare = child.child("estimatedFare").getValue(Double::class.java) ?: 0.0
                         val notes = child.child("notes").getValue(String::class.java) ?: ""
                         val assignedDriverId = child.child("assignedDriverId").getValue(String::class.java) ?: "ALL"
+                        val assignedByAdmin = child.child("assignedByAdmin").getValue(String::class.java) ?: "Master Admin"
+                        val customBaseFare = child.child("customBaseFare").getValue(Double::class.java) ?: 0.0
+                        val customRatePerKm = child.child("customRatePerKm").getValue(Double::class.java) ?: 0.0
                         val statusStr = child.child("status").getValue(String::class.java) ?: DispatchStatus.DISPATCHED.name
                         val timestamp = child.child("timestamp").getValue(Long::class.java) ?: System.currentTimeMillis()
 
@@ -429,6 +441,9 @@ object FirebaseSyncManager {
                                 estimatedFare = estimatedFare,
                                 notes = notes,
                                 assignedDriverId = assignedDriverId,
+                                assignedByAdmin = assignedByAdmin,
+                                customBaseFare = customBaseFare,
+                                customRatePerKm = customRatePerKm,
                                 status = status,
                                 timestamp = timestamp
                             )

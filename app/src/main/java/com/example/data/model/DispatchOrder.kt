@@ -10,6 +10,8 @@ data class DispatchOrder(
     val notes: String = "",
     val assignedDriverId: String = "ALL",
     val assignedByAdmin: String = "Master Admin",
+    val customBaseFare: Double = 0.0,
+    val customRatePerKm: Double = 0.0,
     val status: DispatchStatus = DispatchStatus.DISPATCHED,
     val timestamp: Long = System.currentTimeMillis()
 )

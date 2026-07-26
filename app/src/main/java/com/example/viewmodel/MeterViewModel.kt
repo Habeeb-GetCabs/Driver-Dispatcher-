@@ -67,10 +67,13 @@ class MeterViewModel(application: Application) : AndroidViewModel(application) {
     }
 
     fun startTrip() {
+        startTripWithCustomRates(0.0, 0.0)
+    }
+
+    fun startTripWithCustomRates(customBaseFare: Double = 0.0, customRatePerKm: Double = 0.0) {
         viewModelScope.launch {
-            // Read active settings directly
-            val baseFareVal = settingsRepository.baseFare.first()
-            val farePerKmVal = settingsRepository.farePerKm.first()
+            val baseFareVal = if (customBaseFare > 0.0) customBaseFare else settingsRepository.baseFare.first()
+            val farePerKmVal = if (customRatePerKm > 0.0) customRatePerKm else settingsRepository.farePerKm.first()
             val waitFareVal = settingsRepository.waitFarePerMin.first()
             val currencyVal = settingsRepository.currency.first()
             val thresholdVal = settingsRepository.speedThreshold.first()

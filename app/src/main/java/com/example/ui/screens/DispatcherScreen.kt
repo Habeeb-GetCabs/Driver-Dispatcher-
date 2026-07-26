@@ -38,6 +38,35 @@ import com.example.viewmodel.DispatchViewModel
 import coil.compose.AsyncImage
 import androidx.compose.ui.window.DialogProperties
 
+private fun getResolvedLocationName(context: android.content.Context, driver: DriverUnit): String {
+    val loc = driver.lastLocation.trim()
+    if (loc.isNotBlank() && loc != "GPS Active" && loc != "Locating..." && !loc.startsWith("GPS:")) {
+        return loc
+    }
+    val lat = driver.latitude
+    val lng = driver.longitude
+    if (lat != null && lng != null && (lat != 0.0 || lng != 0.0)) {
+        try {
+            val geocoder = android.location.Geocoder(context, java.util.Locale.getDefault())
+            @Suppress("DEPRECATION")
+            val addresses = geocoder.getFromLocation(lat, lng, 1)
+            if (!addresses.isNullOrEmpty()) {
+                val addr = addresses[0]
+                val subLocality = addr.subLocality ?: addr.featureName
+                val city = addr.locality ?: addr.subAdminArea
+                val parts = listOfNotNull(subLocality, city).distinct().filter { it.isNotBlank() }
+                if (parts.isNotEmpty()) {
+                    return parts.joinToString(", ")
+                }
+            }
+        } catch (e: Exception) {
+            // Geocoder fallback
+        }
+        return String.format(java.util.Locale.US, "GPS: %.4f, %.4f", lat, lng)
+    }
+    return if (loc.isNotBlank()) loc else "GPS Active"
+}
+
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun DispatcherScreen(
@@ -45,6 +74,7 @@ fun DispatcherScreen(
     currencySymbol: String = "₹",
     onSwitchToMeterMode: () -> Unit
 ) {
+    val context = androidx.compose.ui.platform.LocalContext.current
     val orders by dispatchViewModel.dispatchOrders.collectAsStateWithLifecycle()
     val drivers by dispatchViewModel.fleetDrivers.collectAsStateWithLifecycle()
     val selfProfile by dispatchViewModel.driverProfile.collectAsStateWithLifecycle()
@@ -63,8 +93,30 @@ fun DispatcherScreen(
     var pickupAddress by remember { mutableStateOf("") }
     var destinationAddress by remember { mutableStateOf("") }
     var estimatedFareStr by remember { mutableStateOf("") }
+    var customBaseFareStr by remember { mutableStateOf("") }
+    var customRatePerKmStr by remember { mutableStateOf("") }
     var notes by remember { mutableStateOf("") }
     var selectedDriverId by remember { mutableStateOf("ALL") }
+
+    var fleetSearchQuery by remember { mutableStateOf("") }
+
+    val filteredDrivers = remember(drivers, fleetSearchQuery) {
+        if (fleetSearchQuery.isBlank()) {
+            drivers
+        } else {
+            val q = fleetSearchQuery.trim().lowercase(java.util.Locale.ROOT)
+            drivers.filter { driver ->
+                val resolvedLoc = getResolvedLocationName(context, driver).lowercase(java.util.Locale.ROOT)
+                driver.driverName.lowercase(java.util.Locale.ROOT).contains(q) ||
+                driver.driverId.lowercase(java.util.Locale.ROOT).contains(q) ||
+                "drv-${driver.driverId.lowercase(java.util.Locale.ROOT)}".contains(q) ||
+                driver.vehiclePlate.lowercase(java.util.Locale.ROOT).contains(q) ||
+                driver.phoneNumber.lowercase(java.util.Locale.ROOT).contains(q) ||
+                driver.lastLocation.lowercase(java.util.Locale.ROOT).contains(q) ||
+                resolvedLoc.contains(q)
+            }
+        }
+    }
 
     var broadcastText by remember { mutableStateOf("") }
     var showSuccessToast by remember { mutableStateOf(false) }
@@ -352,6 +404,37 @@ fun DispatcherScreen(
                                         )
                                     }
 
+                                    // Optional Custom Fare Controls
+                                    Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+                                        OutlinedTextField(
+                                            value = customBaseFareStr,
+                                            onValueChange = { customBaseFareStr = it },
+                                            label = { Text("Custom Base Fare ($currencySymbol)") },
+                                            placeholder = { Text("Default Rate") },
+                                            leadingIcon = { Icon(Icons.Default.MonetizationOn, contentDescription = null, tint = redBrand) },
+                                            keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
+                                            singleLine = true,
+                                            colors = textFieldColors,
+                                            modifier = Modifier
+                                                .weight(1f)
+                                                .testTag("input_custom_base_fare")
+                                        )
+
+                                        OutlinedTextField(
+                                            value = customRatePerKmStr,
+                                            onValueChange = { customRatePerKmStr = it },
+                                            label = { Text("Custom Rate/KM ($currencySymbol)") },
+                                            placeholder = { Text("Default Rate") },
+                                            leadingIcon = { Icon(Icons.Default.Speed, contentDescription = null, tint = redBrand) },
+                                            keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
+                                            singleLine = true,
+                                            colors = textFieldColors,
+                                            modifier = Modifier
+                                                .weight(1f)
+                                                .testTag("input_custom_rate_per_km")
+                                        )
+                                    }
+
                                     // Driver Selection
                                     Text(
                                         text = "ASSIGN TO DRIVER",
@@ -384,6 +467,9 @@ fun DispatcherScreen(
                                     Button(
                                         onClick = {
                                             val fare = estimatedFareStr.toDoubleOrNull() ?: 25.0
+                                            val customBf = customBaseFareStr.toDoubleOrNull() ?: 0.0
+                                            val customFk = customRatePerKmStr.toDoubleOrNull() ?: 0.0
+
                                             dispatchViewModel.dispatchNewTrip(
                                                 passengerName = passengerName,
                                                 passengerPhone = passengerPhone,
@@ -391,13 +477,17 @@ fun DispatcherScreen(
                                                 destination = destinationAddress,
                                                 estimatedFare = fare,
                                                 notes = notes,
-                                                assignedDriverId = selectedDriverId
+                                                assignedDriverId = selectedDriverId,
+                                                customBaseFare = customBf,
+                                                customRatePerKm = customFk
                                             )
                                             passengerName = ""
                                             passengerPhone = ""
                                             pickupAddress = ""
                                             destinationAddress = ""
                                             estimatedFareStr = ""
+                                            customBaseFareStr = ""
+                                            customRatePerKmStr = ""
                                             notes = ""
                                             showSuccessToast = true
                                         },
@@ -467,6 +557,73 @@ fun DispatcherScreen(
                         verticalArrangement = Arrangement.spacedBy(12.dp),
                         modifier = Modifier.fillMaxSize()
                     ) {
+                        item {
+                            // FLEET LIVE SEARCH BAR
+                            Card(
+                                colors = CardDefaults.cardColors(containerColor = Color.White),
+                                shape = RoundedCornerShape(16.dp),
+                                modifier = Modifier.fillMaxWidth()
+                            ) {
+                                Column(modifier = Modifier.padding(14.dp)) {
+                                    Row(
+                                        verticalAlignment = Alignment.CenterVertically,
+                                        horizontalArrangement = Arrangement.SpaceBetween,
+                                        modifier = Modifier.fillMaxWidth()
+                                    ) {
+                                        Row(verticalAlignment = Alignment.CenterVertically) {
+                                            Icon(
+                                                imageVector = Icons.Default.Search,
+                                                contentDescription = "Search Fleet",
+                                                tint = redBrand
+                                            )
+                                            Spacer(modifier = Modifier.width(8.dp))
+                                            Text(
+                                                text = "FLEET DRIVER SEARCH",
+                                                fontWeight = FontWeight.Bold,
+                                                fontSize = 13.sp,
+                                                color = Color(0xFF1E1E1E)
+                                            )
+                                        }
+                                        Surface(
+                                            color = Color(0xFFEDE7F6),
+                                            shape = RoundedCornerShape(12.dp)
+                                        ) {
+                                            Text(
+                                                text = "${filteredDrivers.size} / ${drivers.size} DRIVERS",
+                                                fontSize = 11.sp,
+                                                fontWeight = FontWeight.Black,
+                                                color = Color(0xFF512DA8),
+                                                modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp)
+                                            )
+                                        }
+                                    }
+
+                                    Spacer(modifier = Modifier.height(8.dp))
+
+                                    OutlinedTextField(
+                                        value = fleetSearchQuery,
+                                        onValueChange = { fleetSearchQuery = it },
+                                        placeholder = { Text("Search by Name (Ramesh), ID (112), Area (Gandhipuram)...") },
+                                        leadingIcon = {
+                                            Icon(Icons.Default.Search, contentDescription = null, tint = Color.Gray)
+                                        },
+                                        trailingIcon = {
+                                            if (fleetSearchQuery.isNotEmpty()) {
+                                                IconButton(onClick = { fleetSearchQuery = "" }) {
+                                                    Icon(Icons.Default.Clear, contentDescription = "Clear search", tint = Color.Gray)
+                                                }
+                                            }
+                                        },
+                                        singleLine = true,
+                                        colors = textFieldColors,
+                                        modifier = Modifier
+                                            .fillMaxWidth()
+                                            .testTag("fleet_search_input")
+                                    )
+                                }
+                            }
+                        }
+
                         item {
                             // Add Driver Card
                             Card(
@@ -692,7 +849,32 @@ fun DispatcherScreen(
                             }
                         }
 
-                        items(drivers) { driver ->
+                        if (filteredDrivers.isEmpty() && fleetSearchQuery.isNotBlank()) {
+                            item {
+                                Card(
+                                    colors = CardDefaults.cardColors(containerColor = Color.White),
+                                    shape = RoundedCornerShape(16.dp),
+                                    modifier = Modifier.fillMaxWidth()
+                                ) {
+                                    Box(
+                                        contentAlignment = Alignment.Center,
+                                        modifier = Modifier
+                                            .fillMaxWidth()
+                                            .padding(24.dp)
+                                    ) {
+                                        Text(
+                                            text = "No drivers found matching \"$fleetSearchQuery\"",
+                                            fontSize = 13.sp,
+                                            color = Color.Gray,
+                                            fontWeight = FontWeight.Medium,
+                                            textAlign = TextAlign.Center
+                                        )
+                                    }
+                                }
+                            }
+                        }
+
+                        items(filteredDrivers) { driver ->
                             Card(
                                 colors = CardDefaults.cardColors(containerColor = Color.White),
                                 shape = RoundedCornerShape(16.dp),
@@ -869,6 +1051,22 @@ fun DispatcherScreen(
                                             color = Color(0xFF512DA8),
                                             modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp)
                                         )
+                                    }
+
+                                    if (order.customBaseFare > 0.0 || order.customRatePerKm > 0.0) {
+                                        Spacer(modifier = Modifier.height(4.dp))
+                                        Surface(
+                                            color = Color(0xFFE0F2F1),
+                                            shape = RoundedCornerShape(8.dp)
+                                        ) {
+                                            Text(
+                                                text = "Custom Rate: Base $currencySymbol${String.format(java.util.Locale.US, "%.2f", order.customBaseFare)} • Rate/KM $currencySymbol${String.format(java.util.Locale.US, "%.2f", order.customRatePerKm)}",
+                                                fontSize = 11.sp,
+                                                fontWeight = FontWeight.Bold,
+                                                color = Color(0xFF00695C),
+                                                modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp)
+                                            )
+                                        }
                                     }
                                 }
                             }

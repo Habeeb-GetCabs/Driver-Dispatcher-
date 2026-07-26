@@ -23,6 +23,8 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.*
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
+import androidx.compose.foundation.text.KeyboardOptions
+import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -81,6 +83,10 @@ fun HomeMeterScreen(
     var pendingIsAcceptedDispatch by remember { mutableStateOf(false) }
     var otpInputText by remember { mutableStateOf("") }
     var isOtpError by remember { mutableStateOf(false) }
+
+    var showSettingsPinModal by remember { mutableStateOf(false) }
+    var settingsPinInput by remember { mutableStateOf("") }
+    var isSettingsPinError by remember { mutableStateOf(false) }
 
     val brandRed = Color(0xFFC62828)
 
@@ -351,7 +357,11 @@ fun HomeMeterScreen(
                     }
 
                     IconButton(
-                        onClick = onNavigateToSettings,
+                        onClick = {
+                            settingsPinInput = ""
+                            isSettingsPinError = false
+                            showSettingsPinModal = true
+                        },
                         modifier = Modifier
                             .testTag("settings_button")
                             .minimumInteractiveComponentSize()
@@ -388,6 +398,129 @@ fun HomeMeterScreen(
                         dispatchViewModel.verifyAdminPin(pin)
                     }
                 )
+            }
+
+            // SECURE SETTINGS ACCESS PIN DIALOG (PIN 2481)
+            if (showSettingsPinModal) {
+                androidx.compose.ui.window.Dialog(
+                    onDismissRequest = {
+                        showSettingsPinModal = false
+                        isSettingsPinError = false
+                    }
+                ) {
+                    Card(
+                        colors = CardDefaults.cardColors(containerColor = Color.White),
+                        shape = RoundedCornerShape(24.dp),
+                        elevation = CardDefaults.cardElevation(defaultElevation = 8.dp),
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(16.dp)
+                    ) {
+                        Column(
+                            modifier = Modifier.padding(20.dp),
+                            horizontalAlignment = Alignment.CenterHorizontally,
+                            verticalArrangement = Arrangement.spacedBy(16.dp)
+                        ) {
+                            Surface(
+                                color = Color(0xFFFFF3E0),
+                                shape = CircleShape,
+                                modifier = Modifier.size(56.dp)
+                            ) {
+                                Box(contentAlignment = Alignment.Center) {
+                                    Icon(
+                                        imageVector = Icons.Default.Lock,
+                                        contentDescription = "Settings Lock",
+                                        tint = Color(0xFFE65100),
+                                        modifier = Modifier.size(28.dp)
+                                    )
+                                }
+                            }
+
+                            Text(
+                                text = "SETTINGS ACCESS LOCKED",
+                                fontWeight = FontWeight.Black,
+                                fontSize = 17.sp,
+                                color = Color(0xFF1E1E1E)
+                            )
+
+                            Text(
+                                text = "Enter Security PIN '2481' to manage base fares, per-km rates, and system parameters.",
+                                fontSize = 12.sp,
+                                color = Color.Gray,
+                                textAlign = TextAlign.Center
+                            )
+
+                            OutlinedTextField(
+                                value = settingsPinInput,
+                                onValueChange = {
+                                    settingsPinInput = it
+                                    if (isSettingsPinError) isSettingsPinError = false
+                                },
+                                label = { Text("Enter Security PIN") },
+                                singleLine = true,
+                                isError = isSettingsPinError,
+                                keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.NumberPassword),
+                                visualTransformation = androidx.compose.ui.text.input.PasswordVisualTransformation(),
+                                colors = OutlinedTextFieldDefaults.colors(
+                                    focusedTextColor = Color(0xFF1E1E1E),
+                                    unfocusedTextColor = Color(0xFF1E1E1E),
+                                    focusedContainerColor = Color.White,
+                                    unfocusedContainerColor = Color.White,
+                                    focusedBorderColor = brandRed,
+                                    unfocusedBorderColor = Color(0xFFBDBDBD)
+                                ),
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .testTag("settings_pin_input")
+                            )
+
+                            if (isSettingsPinError) {
+                                Text(
+                                    text = "⚠️ Invalid PIN. Please enter '2481' to unlock.",
+                                    color = brandRed,
+                                    fontSize = 12.sp,
+                                    fontWeight = FontWeight.Bold,
+                                    textAlign = TextAlign.Center
+                                )
+                            }
+
+                            Row(
+                                horizontalArrangement = Arrangement.spacedBy(10.dp),
+                                modifier = Modifier.fillMaxWidth()
+                            ) {
+                                OutlinedButton(
+                                    onClick = {
+                                        showSettingsPinModal = false
+                                        isSettingsPinError = false
+                                    },
+                                    shape = RoundedCornerShape(12.dp),
+                                    modifier = Modifier.weight(1f)
+                                ) {
+                                    Text("CANCEL")
+                                }
+
+                                Button(
+                                    onClick = {
+                                        if (settingsPinInput.trim() == "2481") {
+                                            showSettingsPinModal = false
+                                            isSettingsPinError = false
+                                            onNavigateToSettings()
+                                        } else {
+                                            isSettingsPinError = true
+                                        }
+                                    },
+                                    colors = ButtonDefaults.buttonColors(containerColor = brandRed),
+                                    shape = RoundedCornerShape(12.dp),
+                                    modifier = Modifier
+                                        .weight(1f)
+                                        .testTag("unlock_settings_button")
+                                ) {
+                                    Text("UNLOCK", fontWeight = FontWeight.Bold)
+                                }
+                            }
+                        }
+                    }
+                }
             }
 
             // DRIVER ASSIGNED ID BANNER CARD
