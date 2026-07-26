@@ -42,6 +42,7 @@ fun GetTaxiNavGraph(
             HomeMeterScreen(
                 viewModel = meterViewModel,
                 dispatchViewModel = dispatchViewModel,
+                settingsViewModel = settingsViewModel,
                 onNavigateToSettings = { navController.navigate("settings") },
                 onNavigateToProfile = { navController.navigate("profile") },
                 onNavigateToReceipt = { tripId -> navController.navigate("receipt/$tripId") }

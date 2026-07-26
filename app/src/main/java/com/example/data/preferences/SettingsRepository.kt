@@ -22,6 +22,11 @@ class SettingsRepository(private val context: Context) {
         val KEY_OUT_OF_CITY_SURCHARGE_TYPE = stringPreferencesKey("out_of_city_surcharge_type") // "FIXED_AMOUNT" or "PERCENTAGE"
         val KEY_OUT_OF_CITY_SURCHARGE_FIXED_AMOUNT = doublePreferencesKey("out_of_city_surcharge_fixed_amount")
         val KEY_OUT_OF_CITY_SURCHARGE_PERCENT = doublePreferencesKey("out_of_city_surcharge_percent")
+        val KEY_ILAIYARAAJA_RINGTONE = stringPreferencesKey("ilaiyaraaja_ringtone")
+    }
+
+    val ilaiyaraajaRingtone: Flow<String> = context.dataStore.data.map { preferences ->
+        preferences[KEY_ILAIYARAAJA_RINGTONE] ?: "ACCORDION_GROOVE"
     }
 
     // Default configuration values
@@ -123,6 +128,12 @@ class SettingsRepository(private val context: Context) {
     suspend fun updateOutOfCitySurchargePercent(value: Double) {
         context.dataStore.edit { preferences ->
             preferences[KEY_OUT_OF_CITY_SURCHARGE_PERCENT] = value
+        }
+    }
+
+    suspend fun updateIlaiyaraajaRingtone(value: String) {
+        context.dataStore.edit { preferences ->
+            preferences[KEY_ILAIYARAAJA_RINGTONE] = value
         }
     }
 }

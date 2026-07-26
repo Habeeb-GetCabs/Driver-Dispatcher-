@@ -1,5 +1,6 @@
 package com.example.ui.screens
 
+import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.layout.*
@@ -10,9 +11,14 @@ import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
+import androidx.compose.material.icons.filled.ArrowDropDown
 import androidx.compose.material.icons.filled.Explore
 import androidx.compose.material.icons.filled.Info
+import androidx.compose.material.icons.filled.MusicNote
+import androidx.compose.material.icons.filled.PlayArrow
 import androidx.compose.material.icons.filled.Save
+import androidx.compose.material.icons.filled.Stop
+import androidx.compose.material.icons.filled.VolumeUp
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
@@ -25,6 +31,7 @@ import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import com.example.audio.IlaiyaraajaRingtonePlayer
 import com.example.service.LocationTrackingService
 import com.example.viewmodel.SettingsViewModel
 
@@ -43,6 +50,7 @@ fun SettingsScreen(
     val autoStartEnabledState by viewModel.autoStartEnabled.collectAsStateWithLifecycle()
     val currencyState by viewModel.currency.collectAsStateWithLifecycle()
     val outOfCitySurchargePercentState by viewModel.outOfCitySurchargePercent.collectAsStateWithLifecycle()
+    val ilaiyaraajaRingtoneState by viewModel.ilaiyaraajaRingtone.collectAsStateWithLifecycle()
 
     var baseFareInput by remember { mutableStateOf("") }
     var farePerKmInput by remember { mutableStateOf("") }
@@ -52,11 +60,20 @@ fun SettingsScreen(
     var outOfCitySurchargePercentInput by remember { mutableStateOf("") }
     var audioEnabled by remember { mutableStateOf(true) }
     var autoStartEnabled by remember { mutableStateOf(true) }
+    var selectedRingtone by remember { mutableStateOf("ACCORDION_GROOVE") }
+    var isPreviewPlaying by remember { mutableStateOf(false) }
+    var isRingtoneDropdownExpanded by remember { mutableStateOf(false) }
 
     val context = LocalContext.current
 
+    DisposableEffect(Unit) {
+        onDispose {
+            IlaiyaraajaRingtonePlayer.stop()
+        }
+    }
+
     // Synchronize inputs once preferences load
-    LaunchedEffect(baseFareState, farePerKmState, waitFarePerMinState, speedThresholdState, currencyState, outOfCitySurchargePercentState, audioEnabledState, autoStartEnabledState) {
+    LaunchedEffect(baseFareState, farePerKmState, waitFarePerMinState, speedThresholdState, currencyState, outOfCitySurchargePercentState, audioEnabledState, autoStartEnabledState, ilaiyaraajaRingtoneState) {
         baseFareInput = baseFareState.toString()
         farePerKmInput = farePerKmState.toString()
         waitFarePerMinInput = waitFarePerMinState.toString()
@@ -65,6 +82,7 @@ fun SettingsScreen(
         outOfCitySurchargePercentInput = outOfCitySurchargePercentState.toString()
         audioEnabled = audioEnabledState
         autoStartEnabled = autoStartEnabledState
+        selectedRingtone = ilaiyaraajaRingtoneState
     }
 
     var showSavedMessage by remember { mutableStateOf(false) }
@@ -114,6 +132,7 @@ fun SettingsScreen(
                     viewModel.updateOutOfCitySurchargePercent(ooc)
                     viewModel.updateAudioEnabled(audioEnabled)
                     viewModel.updateAutoStartEnabled(autoStartEnabled)
+                    viewModel.updateIlaiyaraajaRingtone(selectedRingtone)
 
                     com.example.service.LocationTrackingService.startMonitoring(
                         context = context,
@@ -730,6 +749,243 @@ fun SettingsScreen(
                         ),
                         modifier = Modifier.testTag("toggle_audio")
                     )
+                }
+            }
+
+            // Ilaiyaraaja Alert Ringtone Card (Coimbatore Special)
+            Card(
+                colors = CardDefaults.cardColors(containerColor = Color.White),
+                shape = RoundedCornerShape(24.dp),
+                elevation = CardDefaults.cardElevation(defaultElevation = 2.dp),
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .border(2.dp, Color(0xFFFFD600), RoundedCornerShape(24.dp))
+                    .testTag("ilaiyaraaja_ringtone_card")
+            ) {
+                Column(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(18.dp),
+                    verticalArrangement = Arrangement.spacedBy(14.dp)
+                ) {
+                    Row(
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.SpaceBetween,
+                        modifier = Modifier.fillMaxWidth()
+                    ) {
+                        Row(verticalAlignment = Alignment.CenterVertically) {
+                            Surface(
+                                color = Color(0xFFC62828),
+                                shape = CircleShape,
+                                modifier = Modifier.size(38.dp)
+                            ) {
+                                Box(contentAlignment = Alignment.Center) {
+                                    Icon(
+                                        imageVector = Icons.Default.MusicNote,
+                                        contentDescription = "Ilaiyaraaja Music",
+                                        tint = Color.White,
+                                        modifier = Modifier.size(20.dp)
+                                    )
+                                }
+                            }
+                            Spacer(modifier = Modifier.width(10.dp))
+                            Column {
+                                Text(
+                                    text = "ILAIYARAAJA TRIP ALERT RINGTONE",
+                                    color = Color(0xFF1E293B),
+                                    fontWeight = FontWeight.Black,
+                                    fontSize = 13.sp,
+                                    letterSpacing = 0.5.sp
+                                )
+                                Text(
+                                    text = "Coimbatore Special • Boost Driver Alertness",
+                                    color = Color(0xFFC62828),
+                                    fontWeight = FontWeight.Bold,
+                                    fontSize = 11.sp
+                                )
+                            }
+                        }
+
+                        Surface(
+                            color = Color(0xFFFFF8E1),
+                            shape = RoundedCornerShape(12.dp)
+                        ) {
+                            Text(
+                                text = "COIMBATORE",
+                                fontSize = 10.sp,
+                                fontWeight = FontWeight.Black,
+                                color = Color(0xFFE65100),
+                                modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp)
+                            )
+                        }
+                    }
+
+                    Text(
+                        text = "Select a high-energy Ilaiyaraaja musical hit to ring continuously on incoming trip dispatches until accepted or declined.",
+                        color = Color(0xFF64748B),
+                        fontSize = 12.sp,
+                        lineHeight = 16.sp
+                    )
+
+                    val selectedTrackObj = IlaiyaraajaRingtonePlayer.AVAILABLE_TRACKS.find { it.id == selectedRingtone }
+                        ?: IlaiyaraajaRingtonePlayer.AVAILABLE_TRACKS.first()
+
+                    // Dropdown Selector Box
+                    Box(modifier = Modifier.fillMaxWidth()) {
+                        OutlinedButton(
+                            onClick = { isRingtoneDropdownExpanded = true },
+                            shape = RoundedCornerShape(14.dp),
+                            border = BorderStroke(1.5.dp, Color(0xFFC62828)),
+                            colors = ButtonDefaults.outlinedButtonColors(containerColor = Color(0xFFFAFAFA)),
+                            contentPadding = PaddingValues(horizontal = 14.dp, vertical = 12.dp),
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .testTag("ringtone_dropdown_button")
+                        ) {
+                            Row(
+                                modifier = Modifier.fillMaxWidth(),
+                                horizontalArrangement = Arrangement.SpaceBetween,
+                                verticalAlignment = Alignment.CenterVertically
+                            ) {
+                                Row(
+                                    verticalAlignment = Alignment.CenterVertically,
+                                    modifier = Modifier.weight(1f)
+                                ) {
+                                    Text(
+                                        text = selectedTrackObj.emoji,
+                                        fontSize = 20.sp
+                                    )
+                                    Spacer(modifier = Modifier.width(10.dp))
+                                    Column {
+                                        Text(
+                                            text = selectedTrackObj.title,
+                                            fontWeight = FontWeight.Bold,
+                                            fontSize = 13.sp,
+                                            color = Color(0xFF1E293B)
+                                        )
+                                        Text(
+                                            text = selectedTrackObj.subtitle,
+                                            fontSize = 11.sp,
+                                            color = Color.Gray
+                                        )
+                                    }
+                                }
+                                Icon(
+                                    imageVector = Icons.Default.ArrowDropDown,
+                                    contentDescription = "Expand Ringtone List",
+                                    tint = Color(0xFFC62828)
+                                )
+                            }
+                        }
+
+                        DropdownMenu(
+                            expanded = isRingtoneDropdownExpanded,
+                            onDismissRequest = { isRingtoneDropdownExpanded = false },
+                            modifier = Modifier
+                                .fillMaxWidth(0.85f)
+                                .background(Color.White)
+                        ) {
+                            IlaiyaraajaRingtonePlayer.AVAILABLE_TRACKS.forEach { track ->
+                                DropdownMenuItem(
+                                    text = {
+                                        Row(verticalAlignment = Alignment.CenterVertically) {
+                                            Text(text = track.emoji, fontSize = 20.sp)
+                                            Spacer(modifier = Modifier.width(10.dp))
+                                            Column {
+                                                Text(
+                                                    text = track.title,
+                                                    fontWeight = if (track.id == selectedRingtone) FontWeight.Black else FontWeight.Bold,
+                                                    fontSize = 13.sp,
+                                                    color = if (track.id == selectedRingtone) Color(0xFFC62828) else Color(0xFF1E293B)
+                                                )
+                                                Text(
+                                                    text = track.subtitle,
+                                                    fontSize = 11.sp,
+                                                    color = Color.Gray
+                                                )
+                                            }
+                                        }
+                                    },
+                                    onClick = {
+                                        selectedRingtone = track.id
+                                        isRingtoneDropdownExpanded = false
+                                        if (isPreviewPlaying) {
+                                            IlaiyaraajaRingtonePlayer.playLoop(track.id)
+                                        }
+                                    },
+                                    modifier = Modifier.testTag("ringtone_option_${track.id}")
+                                )
+                            }
+                        }
+                    }
+
+                    // Test / Preview Button
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.spacedBy(10.dp),
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Button(
+                            onClick = {
+                                if (isPreviewPlaying) {
+                                    IlaiyaraajaRingtonePlayer.stop()
+                                    isPreviewPlaying = false
+                                } else {
+                                    IlaiyaraajaRingtonePlayer.playLoop(selectedRingtone)
+                                    isPreviewPlaying = true
+                                }
+                            },
+                            colors = ButtonDefaults.buttonColors(
+                                containerColor = if (isPreviewPlaying) Color(0xFFD32F2F) else Color(0xFF2E7D32)
+                            ),
+                            shape = RoundedCornerShape(12.dp),
+                            modifier = Modifier
+                                .weight(1f)
+                                .height(46.dp)
+                                .testTag("preview_ringtone_button")
+                        ) {
+                            Row(verticalAlignment = Alignment.CenterVertically) {
+                                Icon(
+                                    imageVector = if (isPreviewPlaying) Icons.Default.Stop else Icons.Default.PlayArrow,
+                                    contentDescription = null,
+                                    tint = Color.White
+                                )
+                                Spacer(modifier = Modifier.width(6.dp))
+                                Text(
+                                    text = if (isPreviewPlaying) "STOP PREVIEW ⏹️" else "TEST SOUND 🎵",
+                                    fontWeight = FontWeight.Black,
+                                    fontSize = 12.sp,
+                                    color = Color.White
+                                )
+                            }
+                        }
+
+                        if (isPreviewPlaying) {
+                            Surface(
+                                color = Color(0xFFE8F5E9),
+                                shape = RoundedCornerShape(12.dp)
+                            ) {
+                                Row(
+                                    verticalAlignment = Alignment.CenterVertically,
+                                    modifier = Modifier.padding(horizontal = 10.dp, vertical = 12.dp)
+                                ) {
+                                    Icon(
+                                        imageVector = Icons.Default.VolumeUp,
+                                        contentDescription = "Playing",
+                                        tint = Color(0xFF2E7D32),
+                                        modifier = Modifier.size(16.dp)
+                                    )
+                                    Spacer(modifier = Modifier.width(4.dp))
+                                    Text(
+                                        text = "Looping...",
+                                        fontSize = 11.sp,
+                                        fontWeight = FontWeight.Bold,
+                                        color = Color(0xFF2E7D32)
+                                    )
+                                }
+                            }
+                        }
+                    }
                 }
             }
 

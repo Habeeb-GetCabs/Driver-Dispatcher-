@@ -43,6 +43,9 @@ class SettingsViewModel(application: Application) : AndroidViewModel(application
     val outOfCitySurchargePercent: StateFlow<Double> = settingsRepository.outOfCitySurchargePercent
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), 25.0)
 
+    val ilaiyaraajaRingtone: StateFlow<String> = settingsRepository.ilaiyaraajaRingtone
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), "ACCORDION_GROOVE")
+
     fun updateBaseFare(value: Double) {
         viewModelScope.launch {
             settingsRepository.updateBaseFare(value)
@@ -100,6 +103,12 @@ class SettingsViewModel(application: Application) : AndroidViewModel(application
     fun updateOutOfCitySurchargePercent(value: Double) {
         viewModelScope.launch {
             settingsRepository.updateOutOfCitySurchargePercent(value)
+        }
+    }
+
+    fun updateIlaiyaraajaRingtone(value: String) {
+        viewModelScope.launch {
+            settingsRepository.updateIlaiyaraajaRingtone(value)
         }
     }
 }

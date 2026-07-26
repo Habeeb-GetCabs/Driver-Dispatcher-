@@ -53,6 +53,7 @@ import com.example.ui.components.TripMapView
 import com.example.viewmodel.AppRole
 import com.example.viewmodel.DispatchViewModel
 import com.example.viewmodel.MeterViewModel
+import com.example.viewmodel.SettingsViewModel
 import java.text.SimpleDateFormat
 import java.util.Date
 import java.util.Locale
@@ -62,11 +63,14 @@ import java.util.Locale
 fun HomeMeterScreen(
     viewModel: MeterViewModel,
     dispatchViewModel: DispatchViewModel,
+    settingsViewModel: SettingsViewModel? = null,
     onNavigateToSettings: () -> Unit,
     onNavigateToProfile: () -> Unit,
     onNavigateToReceipt: (Int) -> Unit
 ) {
     val context = LocalContext.current
+    val selectedRingtoneId by (settingsViewModel?.ilaiyaraajaRingtone ?: kotlinx.coroutines.flow.flowOf("ACCORDION_GROOVE"))
+        .collectAsStateWithLifecycle(initialValue = "ACCORDION_GROOVE")
     val tripState by viewModel.tripState.collectAsStateWithLifecycle()
     val allTrips by viewModel.allTrips.collectAsStateWithLifecycle()
     val hasBackup by viewModel.hasActiveSessionBackup.collectAsStateWithLifecycle()
@@ -155,6 +159,7 @@ fun HomeMeterScreen(
         TripDispatchAlertModal(
             order = activeAlertTrip!!,
             currencySymbol = tripState.currency,
+            selectedRingtoneId = selectedRingtoneId,
             onAccept = { order ->
                 dispatchViewModel.acceptTrip(order.orderId)
             },
