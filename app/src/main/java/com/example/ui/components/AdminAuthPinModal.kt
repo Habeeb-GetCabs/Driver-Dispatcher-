@@ -104,7 +104,7 @@ fun AdminAuthPinModal(
                         pinText = it
                         isErrorVisible = false
                     },
-                    label = { Text("Admin PIN (Default: 1234)") },
+                    label = { Text("Admin Security PIN") },
                     leadingIcon = { Icon(Icons.Default.Lock, contentDescription = null) },
                     trailingIcon = {
                         IconButton(onClick = { isPasswordVisible = !isPasswordVisible }) {
@@ -126,7 +126,7 @@ fun AdminAuthPinModal(
 
                 if (isErrorVisible) {
                     Text(
-                        text = "❌ Incorrect Admin Password! Default is 1234",
+                        text = "❌ Incorrect Admin Password!",
                         color = redBrand,
                         fontSize = 12.sp,
                         fontWeight = FontWeight.Bold,

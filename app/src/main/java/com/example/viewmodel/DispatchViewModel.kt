@@ -37,7 +37,7 @@ class DispatchViewModel(application: Application) : AndroidViewModel(application
     private val _isDispatcherAuthenticated = MutableStateFlow(false)
     val isDispatcherAuthenticated: StateFlow<Boolean> = _isDispatcherAuthenticated.asStateFlow()
 
-    private val _adminPin = MutableStateFlow("1234")
+    private val _adminPin = MutableStateFlow("1403")
     val adminPin: StateFlow<String> = _adminPin.asStateFlow()
 
     private val _dispatchOrders = MutableStateFlow<List<DispatchOrder>>(emptyList())
@@ -186,12 +186,22 @@ class DispatchViewModel(application: Application) : AndroidViewModel(application
     }
 
     fun verifyAdminPin(enteredPin: String): Boolean {
-        return if (enteredPin == _adminPin.value || enteredPin == "1234") {
+        return if (enteredPin == _adminPin.value || enteredPin == "1403") {
             _isDispatcherAuthenticated.value = true
             _currentRole.value = AppRole.DISPATCHER
             true
         } else {
             false
+        }
+    }
+
+    fun removeDriverFromFleet(driverId: String) {
+        FirebaseSyncManager.deleteDriver(driverId) { success ->
+            if (success) {
+                _fleetDrivers.value = _fleetDrivers.value.filterNot { it.driverId == driverId }
+                customFleetUnits.removeAll { it.driverId == driverId }
+                remoteFleetUnits.removeAll { it.driverId == driverId }
+            }
         }
     }
 

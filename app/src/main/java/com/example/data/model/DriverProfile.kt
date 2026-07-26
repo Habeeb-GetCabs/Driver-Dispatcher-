@@ -9,9 +9,9 @@ data class DriverProfile(
     val photoUri: String = "",
     val isOnline: Boolean = true,
     val status: String = "AVAILABLE", // "AVAILABLE", "ON_TRIP", "BUSY", "OFFLINE"
-    val latitude: Double? = 37.7749,
-    val longitude: Double? = -122.4194,
-    val lastLocationName: String = "GPS Active",
+    val latitude: Double? = null,
+    val longitude: Double? = null,
+    val lastLocationName: String = "Locating...",
     val batteryPercent: Int = 98,
     val completedTripsCount: Int = 12,
     val rating: Double = 4.9,

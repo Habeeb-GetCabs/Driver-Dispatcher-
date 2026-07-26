@@ -148,6 +148,8 @@ class LocationTrackingService : Service() {
         }
     }
 
+    private var currentDriverId: String = ""
+
     override fun onCreate() {
         super.onCreate()
         Log.d(TAG, "onCreate: Initializing tracking Service")
@@ -157,6 +159,14 @@ class LocationTrackingService : Service() {
         
         val database = TripDatabase.getDatabase(this)
         repository = TripRepository(database.tripDao())
+
+        // Load driverId for Firebase location updates
+        serviceScope.launch {
+            val driverRepo = com.example.data.preferences.DriverProfileRepository(this@LocationTrackingService)
+            driverRepo.driverProfileFlow.collect { prof ->
+                currentDriverId = prof.driverId
+            }
+        }
 
         // Setup notification channel
         createNotificationChannel()
@@ -628,6 +638,16 @@ class LocationTrackingService : Service() {
                 announceVoice("Vehicle movement detected. Ride auto-resumed.")
                 return
             }
+        }
+
+        if (currentDriverId.isNotBlank()) {
+            val locName = resolveAddress(location.latitude, location.longitude)
+            com.example.data.remote.FirebaseSyncManager.updateDriverLocation(
+                currentDriverId,
+                location.latitude,
+                location.longitude,
+                locName
+            )
         }
 
         if (currentState.status != TripStatus.RUNNING) {

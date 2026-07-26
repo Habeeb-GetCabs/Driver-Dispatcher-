@@ -32,6 +32,7 @@ import androidx.compose.ui.unit.sp
 import com.example.R
 import com.example.data.model.DriverProfile
 import com.example.viewmodel.DispatchViewModel
+import coil.compose.AsyncImage
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -126,11 +127,13 @@ fun DriverProfileScreen(
                         contentAlignment = Alignment.Center
                     ) {
                         if (photoUriStr.isNotBlank()) {
-                            Icon(
-                                imageVector = Icons.Default.Person,
+                            AsyncImage(
+                                model = photoUriStr,
                                 contentDescription = "Driver Selfie",
-                                tint = redBrand,
-                                modifier = Modifier.size(60.dp)
+                                contentScale = ContentScale.Crop,
+                                modifier = Modifier
+                                    .fillMaxSize()
+                                    .clip(CircleShape)
                             )
                         } else {
                             Image(

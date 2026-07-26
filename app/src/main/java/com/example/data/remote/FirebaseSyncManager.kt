@@ -33,7 +33,7 @@ object FirebaseSyncManager {
     private val ordersRef by lazy { database.getReference("dispatch_orders") }
 
     /**
-     * Publish or update driver profile to Firebase Realtime Database including GPS coordinates under /drivers/{driverId}/location.
+     * Publish or update driver profile to Firebase Realtime Database including GPS coordinates under /drivers/{driverId}/location and photoUrl.
      */
     fun syncDriverProfile(profile: DriverProfile) {
         if (profile.driverId.isBlank()) return
@@ -52,6 +52,8 @@ object FirebaseSyncManager {
             "lastLocationName" to profile.lastLocationName,
             "batteryPercent" to profile.batteryPercent,
             "fleetNetworkCode" to profile.fleetNetworkCode,
+            "photoUrl" to profile.photoUri,
+            "photoUri" to profile.photoUri,
             "lastUpdatedTimestamp" to System.currentTimeMillis()
         )
         
@@ -71,6 +73,25 @@ object FirebaseSyncManager {
             }
 
         driversRef.child(profile.driverId).child("location").setValue(locationMap)
+    }
+
+    /**
+     * Delete driver record from Firebase database (/drivers/{driverId}).
+     */
+    fun deleteDriver(driverId: String, onComplete: (Boolean) -> Unit) {
+        if (driverId.isBlank()) {
+            onComplete(false)
+            return
+        }
+        driversRef.child(driverId).removeValue()
+            .addOnSuccessListener {
+                Log.d(TAG, "Driver $driverId removed from Firebase successfully.")
+                onComplete(true)
+            }
+            .addOnFailureListener { e ->
+                Log.e(TAG, "Failed to delete driver $driverId from Firebase: ${e.message}", e)
+                onComplete(false)
+            }
     }
 
     /**
@@ -111,6 +132,10 @@ object FirebaseSyncManager {
                         val battery = child.child("batteryPercent").getValue(Long::class.java)?.toInt()
                             ?: child.child("batteryPercent").getValue(Int::class.java) ?: 95
 
+                        val photoUrl = child.child("photoUrl").getValue(String::class.java)
+                            ?: child.child("photoUri").getValue(String::class.java) ?: ""
+                        val phone = child.child("phoneNumber").getValue(String::class.java) ?: ""
+
                         val lat = child.child("latitude").getValue(Double::class.java)
                             ?: child.child("location").child("latitude").getValue(Double::class.java)
                         val lng = child.child("longitude").getValue(Double::class.java)
@@ -123,7 +148,7 @@ object FirebaseSyncManager {
                             rawLocName = if (lat != null && lng != null && (lat != 0.0 || lng != 0.0)) {
                                 String.format(Locale.US, "GPS: %.4f, %.4f", lat, lng)
                             } else {
-                                "GPS Locating..."
+                                "Locating..."
                             }
                         }
 
@@ -136,7 +161,9 @@ object FirebaseSyncManager {
                                 batteryPercent = battery,
                                 lastLocation = rawLocName,
                                 latitude = lat,
-                                longitude = lng
+                                longitude = lng,
+                                photoUrl = photoUrl,
+                                phoneNumber = phone
                             )
                         )
                     } catch (e: Exception) {

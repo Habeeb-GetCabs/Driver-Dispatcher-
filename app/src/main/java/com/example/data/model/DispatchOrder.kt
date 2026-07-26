@@ -29,5 +29,7 @@ data class DriverUnit(
     val batteryPercent: Int = 95,
     val lastLocation: String = "GPS Active",
     val latitude: Double? = null,
-    val longitude: Double? = null
+    val longitude: Double? = null,
+    val photoUrl: String = "",
+    val phoneNumber: String = ""
 )

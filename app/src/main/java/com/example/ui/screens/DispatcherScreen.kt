@@ -35,6 +35,8 @@ import com.example.data.model.DispatchStatus
 import com.example.data.model.DriverUnit
 import com.example.ui.components.TripMapView
 import com.example.viewmodel.DispatchViewModel
+import coil.compose.AsyncImage
+import androidx.compose.ui.window.DialogProperties
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -600,12 +602,23 @@ fun DispatcherScreen(
                                             modifier = Modifier.size(44.dp)
                                         ) {
                                             Box(contentAlignment = Alignment.Center) {
-                                                if (driver.driverId == selfProfile.driverId && selfProfile.photoUri.isNotBlank()) {
-                                                    Icon(
-                                                        imageVector = Icons.Default.Person,
+                                                if (driver.photoUrl.isNotBlank()) {
+                                                    AsyncImage(
+                                                        model = driver.photoUrl,
                                                         contentDescription = "Driver Avatar",
-                                                        tint = redBrand,
-                                                        modifier = Modifier.size(24.dp)
+                                                        modifier = Modifier
+                                                            .fillMaxSize()
+                                                            .clip(CircleShape),
+                                                        contentScale = ContentScale.Crop
+                                                    )
+                                                } else if (driver.driverId == selfProfile.driverId && selfProfile.photoUri.isNotBlank()) {
+                                                    AsyncImage(
+                                                        model = selfProfile.photoUri,
+                                                        contentDescription = "Driver Avatar",
+                                                        modifier = Modifier
+                                                            .fillMaxSize()
+                                                            .clip(CircleShape),
+                                                        contentScale = ContentScale.Crop
                                                     )
                                                 } else {
                                                     Icon(
@@ -624,8 +637,9 @@ fun DispatcherScreen(
                                                 fontSize = 15.sp,
                                                 color = Color(0xFF1E1E1E)
                                             )
+                                            val locDisplay = if (driver.latitude != null && driver.longitude != null && (driver.latitude != 0.0 || driver.longitude != 0.0)) driver.lastLocation else "Locating..."
                                             Text(
-                                                text = "Plate: ${driver.vehiclePlate} • ${driver.lastLocation}",
+                                                text = "Plate: ${driver.vehiclePlate} • $locDisplay",
                                                 fontSize = 12.sp,
                                                 color = Color.Gray
                                             )
@@ -736,59 +750,291 @@ fun DispatcherScreen(
         }
     }
 
-    // DRIVER INSPECTION MODAL DIALOG
+    // DRIVER INSPECTION FULL-SCREEN VIEW
     if (selectedDriverForDetails != null) {
         val d = selectedDriverForDetails!!
-        AlertDialog(
+        var isMapFullscreen by remember { mutableStateOf(false) }
+        var showDeleteConfirmDialog by remember { mutableStateOf(false) }
+
+        androidx.compose.ui.window.Dialog(
             onDismissRequest = { selectedDriverForDetails = null },
-            confirmButton = {
-                Button(
-                    onClick = { selectedDriverForDetails = null },
-                    colors = ButtonDefaults.buttonColors(containerColor = redBrand)
-                ) {
-                    Text("CLOSE", color = Color.White, fontWeight = FontWeight.Bold)
-                }
-            },
-            title = {
-                Row(verticalAlignment = Alignment.CenterVertically) {
-                    Icon(Icons.Default.Badge, contentDescription = null, tint = redBrand)
-                    Spacer(modifier = Modifier.width(8.dp))
-                    Text(text = "Driver Profile: ${d.driverId}", fontWeight = FontWeight.Black, fontSize = 16.sp)
-                }
-            },
-            text = {
-                Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                    Text("Name: ${d.driverName}", fontWeight = FontWeight.Bold, color = Color(0xFF1E1E1E))
-                    Text("Vehicle Plate: ${d.vehiclePlate}", color = Color(0xFF1E1E1E))
-                    Text("Status: ${d.status}", color = if (d.status == "AVAILABLE") Color(0xFF2E7D32) else redBrand, fontWeight = FontWeight.Bold)
-                    Text("Battery Level: ${d.batteryPercent}%", color = Color(0xFF1E1E1E))
-                    Text("Last Known Location: ${d.lastLocation}", color = Color.Gray)
-
-                    val driverLat = d.latitude ?: selfProfile.latitude ?: 37.7749
-                    val driverLng = d.longitude ?: selfProfile.longitude ?: -122.4194
-
-                    Spacer(modifier = Modifier.height(8.dp))
-                    Text("LIVE GPS LOCATION", fontWeight = FontWeight.Bold, fontSize = 11.sp, color = redBrand)
-                    // Live Location Map Box
+            properties = DialogProperties(usePlatformDefaultWidth = false)
+        ) {
+            Surface(
+                modifier = Modifier.fillMaxSize(),
+                color = Color(0xFFF8FAFC)
+            ) {
+                Column(modifier = Modifier.fillMaxSize()) {
+                    // Top Header Bar
                     Surface(
-                        shape = RoundedCornerShape(12.dp),
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .height(140.dp)
+                        color = redBrand,
+                        modifier = Modifier.fillMaxWidth()
                     ) {
-                        TripMapView(
-                            tripState = com.example.data.model.TripState(
-                                latitude = driverLat,
-                                longitude = driverLng,
-                                status = com.example.data.model.TripStatus.RUNNING
-                            ),
-                            modifier = Modifier.fillMaxSize()
-                        )
+                        Row(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .padding(horizontal = 16.dp, vertical = 12.dp),
+                            horizontalArrangement = Arrangement.SpaceBetween,
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            Row(verticalAlignment = Alignment.CenterVertically) {
+                                IconButton(onClick = { selectedDriverForDetails = null }) {
+                                    Icon(Icons.Default.Close, contentDescription = "Close", tint = Color.White)
+                                }
+                                Spacer(modifier = Modifier.width(4.dp))
+                                Text(
+                                    text = "DRIVER DETAILS #${d.driverId}",
+                                    fontWeight = FontWeight.Black,
+                                    fontSize = 16.sp,
+                                    color = Color.White
+                                )
+                            }
+
+                            // DELETE DRIVER / REMOVE FROM FLEET BUTTON
+                            Button(
+                                onClick = { showDeleteConfirmDialog = true },
+                                colors = ButtonDefaults.buttonColors(containerColor = Color.White),
+                                shape = RoundedCornerShape(12.dp),
+                                contentPadding = PaddingValues(horizontal = 10.dp, vertical = 6.dp)
+                            ) {
+                                Row(verticalAlignment = Alignment.CenterVertically) {
+                                    Icon(Icons.Default.Delete, contentDescription = "Delete Driver", tint = redBrand, modifier = Modifier.size(16.dp))
+                                    Spacer(modifier = Modifier.width(4.dp))
+                                    Text("REMOVE DRIVER", color = redBrand, fontWeight = FontWeight.Black, fontSize = 11.sp)
+                                }
+                            }
+                        }
+                    }
+
+                    // Content Body
+                    Column(
+                        modifier = Modifier
+                            .fillMaxSize()
+                            .padding(16.dp),
+                        verticalArrangement = Arrangement.spacedBy(12.dp)
+                    ) {
+                        // Driver Info Card
+                        Card(
+                            colors = CardDefaults.cardColors(containerColor = Color.White),
+                            shape = RoundedCornerShape(20.dp),
+                            elevation = CardDefaults.cardElevation(defaultElevation = 4.dp),
+                            modifier = Modifier.fillMaxWidth()
+                        ) {
+                            Row(
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .padding(16.dp),
+                                verticalAlignment = Alignment.CenterVertically
+                            ) {
+                                // Circular Avatar
+                                Box(
+                                    modifier = Modifier
+                                        .size(68.dp)
+                                        .clip(CircleShape)
+                                        .background(Color(0xFFFFEBEE))
+                                        .border(2.dp, redBrand, CircleShape),
+                                    contentAlignment = Alignment.Center
+                                ) {
+                                    if (d.photoUrl.isNotBlank()) {
+                                        AsyncImage(
+                                            model = d.photoUrl,
+                                            contentDescription = "Driver Avatar",
+                                            modifier = Modifier
+                                                .fillMaxSize()
+                                                .clip(CircleShape),
+                                            contentScale = ContentScale.Crop
+                                        )
+                                    } else {
+                                        Icon(
+                                            imageVector = Icons.Default.Person,
+                                            contentDescription = "Driver",
+                                            tint = redBrand,
+                                            modifier = Modifier.size(36.dp)
+                                        )
+                                    }
+                                }
+
+                                Spacer(modifier = Modifier.width(16.dp))
+
+                                Column(modifier = Modifier.weight(1f)) {
+                                    Text(
+                                        text = d.driverName,
+                                        fontWeight = FontWeight.Black,
+                                        fontSize = 18.sp,
+                                        color = Color(0xFF1E1E1E)
+                                    )
+                                    Text(
+                                        text = "Vehicle Plate: ${d.vehiclePlate}",
+                                        fontWeight = FontWeight.Bold,
+                                        fontSize = 13.sp,
+                                        color = Color(0xFF424242)
+                                    )
+                                    if (d.phoneNumber.isNotBlank()) {
+                                        Text(
+                                            text = "Phone: ${d.phoneNumber}",
+                                            fontSize = 12.sp,
+                                            color = Color.Gray
+                                        )
+                                    }
+                                    val locName = if (d.latitude != null && d.longitude != null && (d.latitude != 0.0 || d.longitude != 0.0)) d.lastLocation else "Locating..."
+                                    Text(
+                                        text = "Location: $locName",
+                                        fontSize = 11.sp,
+                                        color = Color.Gray
+                                    )
+                                    Spacer(modifier = Modifier.height(4.dp))
+                                    Row(
+                                        horizontalArrangement = Arrangement.spacedBy(8.dp),
+                                        verticalAlignment = Alignment.CenterVertically
+                                    ) {
+                                        Surface(
+                                            color = if (d.status == "AVAILABLE") Color(0xFFE8F5E9) else Color(0xFFFFEBEE),
+                                            shape = RoundedCornerShape(10.dp)
+                                        ) {
+                                            Text(
+                                                text = d.status,
+                                                color = if (d.status == "AVAILABLE") Color(0xFF2E7D32) else redBrand,
+                                                fontWeight = FontWeight.Black,
+                                                fontSize = 10.sp,
+                                                modifier = Modifier.padding(horizontal = 8.dp, vertical = 3.dp)
+                                            )
+                                        }
+                                        Text(
+                                            text = "🔋 ${d.batteryPercent}% Battery",
+                                            fontSize = 11.sp,
+                                            fontWeight = FontWeight.Bold,
+                                            color = Color.Gray
+                                        )
+                                    }
+                                }
+                            }
+                        }
+
+                        // Live Location Header
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            horizontalArrangement = Arrangement.SpaceBetween,
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            Row(verticalAlignment = Alignment.CenterVertically) {
+                                Icon(Icons.Default.MyLocation, contentDescription = null, tint = redBrand, modifier = Modifier.size(18.dp))
+                                Spacer(modifier = Modifier.width(6.dp))
+                                Text(
+                                    text = "LIVE GPS TRACKING MAP",
+                                    fontWeight = FontWeight.Black,
+                                    fontSize = 12.sp,
+                                    color = Color(0xFF1E1E1E)
+                                )
+                            }
+                            Text(
+                                text = "Tap map to enlarge",
+                                fontSize = 11.sp,
+                                color = redBrand,
+                                fontWeight = FontWeight.Bold
+                            )
+                        }
+
+                        // ENLARGED MAP CONTAINER
+                        Card(
+                            colors = CardDefaults.cardColors(containerColor = Color.White),
+                            shape = RoundedCornerShape(20.dp),
+                            elevation = CardDefaults.cardElevation(defaultElevation = 6.dp),
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .weight(1f)
+                                .clickable { isMapFullscreen = true }
+                        ) {
+                            Box(modifier = Modifier.fillMaxSize()) {
+                                TripMapView(
+                                    tripState = com.example.data.model.TripState(
+                                        latitude = d.latitude,
+                                        longitude = d.longitude,
+                                        status = com.example.data.model.TripStatus.RUNNING
+                                    ),
+                                    modifier = Modifier.fillMaxSize()
+                                )
+
+                                Surface(
+                                    color = Color.Black.copy(alpha = 0.70f),
+                                    shape = RoundedCornerShape(12.dp),
+                                    modifier = Modifier
+                                        .align(Alignment.BottomEnd)
+                                        .padding(12.dp)
+                                ) {
+                                    Row(
+                                        modifier = Modifier.padding(horizontal = 10.dp, vertical = 6.dp),
+                                        verticalAlignment = Alignment.CenterVertically
+                                    ) {
+                                        Icon(Icons.Default.Fullscreen, contentDescription = "Expand", tint = Color.White, modifier = Modifier.size(16.dp))
+                                        Spacer(modifier = Modifier.width(4.dp))
+                                        Text("FULLSCREEN MAP", color = Color.White, fontSize = 10.sp, fontWeight = FontWeight.Bold)
+                                    }
+                                }
+                            }
+                        }
                     }
                 }
-            },
-            containerColor = Color.White
-        )
+
+                // EXPANDED FULLSCREEN MAP OVERLAY
+                if (isMapFullscreen) {
+                    androidx.compose.ui.window.Dialog(
+                        onDismissRequest = { isMapFullscreen = false },
+                        properties = DialogProperties(usePlatformDefaultWidth = false)
+                    ) {
+                        Box(modifier = Modifier.fillMaxSize()) {
+                            TripMapView(
+                                tripState = com.example.data.model.TripState(
+                                    latitude = d.latitude,
+                                    longitude = d.longitude,
+                                    status = com.example.data.model.TripStatus.RUNNING
+                                ),
+                                modifier = Modifier.fillMaxSize()
+                            )
+
+                            FloatingActionButton(
+                                onClick = { isMapFullscreen = false },
+                                containerColor = redBrand,
+                                contentColor = Color.White,
+                                modifier = Modifier
+                                    .align(Alignment.TopEnd)
+                                    .padding(24.dp)
+                            ) {
+                                Icon(Icons.Default.Close, contentDescription = "Exit Fullscreen")
+                            }
+                        }
+                    }
+                }
+
+                // CONFIRM DELETE DRIVER DIALOG
+                if (showDeleteConfirmDialog) {
+                    AlertDialog(
+                        onDismissRequest = { showDeleteConfirmDialog = false },
+                        title = { Text("Delete Driver Record?", fontWeight = FontWeight.Black) },
+                        text = {
+                            Text("Are you sure you want to remove Driver ${d.driverName} (${d.driverId}) from active fleet database? This action is permanent.")
+                        },
+                        confirmButton = {
+                            Button(
+                                onClick = {
+                                    dispatchViewModel.removeDriverFromFleet(d.driverId)
+                                    showDeleteConfirmDialog = false
+                                    selectedDriverForDetails = null
+                                },
+                                colors = ButtonDefaults.buttonColors(containerColor = redBrand)
+                            ) {
+                                Text("YES, DELETE DRIVER", color = Color.White, fontWeight = FontWeight.Bold)
+                            }
+                        },
+                        dismissButton = {
+                            TextButton(onClick = { showDeleteConfirmDialog = false }) {
+                                Text("CANCEL", color = Color.Gray)
+                            }
+                        },
+                        containerColor = Color.White
+                    )
+                }
+            }
+        }
     }
 }
 

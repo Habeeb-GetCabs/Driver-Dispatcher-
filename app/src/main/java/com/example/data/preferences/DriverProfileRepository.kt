@@ -41,7 +41,7 @@ class DriverProfileRepository(private val context: Context) {
     }
 
     val adminPinFlow: Flow<String> = context.driverDataStore.data.map { prefs ->
-        prefs[KEY_ADMIN_PIN] ?: "1234"
+        prefs[KEY_ADMIN_PIN] ?: "1403"
     }
 
     suspend fun saveProfile(profile: DriverProfile) {
