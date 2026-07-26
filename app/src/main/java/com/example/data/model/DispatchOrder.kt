@@ -9,8 +9,16 @@ data class DispatchOrder(
     val estimatedFare: Double,
     val notes: String = "",
     val assignedDriverId: String = "ALL",
+    val assignedByAdmin: String = "Master Admin",
     val status: DispatchStatus = DispatchStatus.DISPATCHED,
     val timestamp: Long = System.currentTimeMillis()
+)
+
+data class AdminAccount(
+    val adminId: String = "",
+    val name: String = "",
+    val pin: String = "",
+    val role: String = "SUB_ADMIN" // "MASTER_ADMIN" or "SUB_ADMIN"
 )
 
 enum class DispatchStatus {

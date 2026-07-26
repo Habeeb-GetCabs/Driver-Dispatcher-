@@ -57,8 +57,30 @@ fun DriverProfileScreen(
     val photoPickerLauncher = rememberLauncherForActivityResult(
         contract = ActivityResultContracts.GetContent()
     ) { uri: Uri? ->
-        uri?.let {
-            photoUriStr = it.toString()
+        uri?.let { selectedUri ->
+            try {
+                val inputStream = context.contentResolver.openInputStream(selectedUri)
+                val originalBitmap = android.graphics.BitmapFactory.decodeStream(inputStream)
+                inputStream?.close()
+                if (originalBitmap != null) {
+                    val maxDim = 360
+                    val width = originalBitmap.width
+                    val height = originalBitmap.height
+                    val scale = Math.min(maxDim.toFloat() / width, maxDim.toFloat() / height)
+                    val targetW = if (scale < 1.0f) (width * scale).toInt().coerceAtLeast(1) else width
+                    val targetH = if (scale < 1.0f) (height * scale).toInt().coerceAtLeast(1) else height
+                    val resized = android.graphics.Bitmap.createScaledBitmap(originalBitmap, targetW, targetH, true)
+                    val baos = java.io.ByteArrayOutputStream()
+                    resized.compress(android.graphics.Bitmap.CompressFormat.JPEG, 75, baos)
+                    val imageBytes = baos.toByteArray()
+                    val base64String = android.util.Base64.encodeToString(imageBytes, android.util.Base64.NO_WRAP)
+                    photoUriStr = "data:image/jpeg;base64,$base64String"
+                } else {
+                    photoUriStr = selectedUri.toString()
+                }
+            } catch (e: Exception) {
+                photoUriStr = selectedUri.toString()
+            }
         }
     }
 

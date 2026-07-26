@@ -70,7 +70,7 @@ fun TripMapView(
     val currentLatLng = if (tripState.latitude != null && tripState.longitude != null) {
         LatLng(tripState.latitude, tripState.longitude)
     } else {
-        LatLng(37.7749, -122.4194)
+        LatLng(11.0168, 76.9558)
     }
 
     val cameraPositionState = rememberCameraPositionState {

@@ -40,6 +40,15 @@ class DispatchViewModel(application: Application) : AndroidViewModel(application
     private val _adminPin = MutableStateFlow("1403")
     val adminPin: StateFlow<String> = _adminPin.asStateFlow()
 
+    private val _currentAdmin = MutableStateFlow<com.example.data.model.AdminAccount?>(null)
+    val currentAdmin: StateFlow<com.example.data.model.AdminAccount?> = _currentAdmin.asStateFlow()
+
+    private val _adminAccounts = MutableStateFlow<List<com.example.data.model.AdminAccount>>(emptyList())
+    val adminAccounts: StateFlow<List<com.example.data.model.AdminAccount>> = _adminAccounts.asStateFlow()
+
+    private val _dispatchHistory = MutableStateFlow<List<DispatchOrder>>(emptyList())
+    val dispatchHistory: StateFlow<List<DispatchOrder>> = _dispatchHistory.asStateFlow()
+
     private val _dispatchOrders = MutableStateFlow<List<DispatchOrder>>(emptyList())
     val dispatchOrders: StateFlow<List<DispatchOrder>> = _dispatchOrders.asStateFlow()
 
@@ -71,6 +80,37 @@ class DispatchViewModel(application: Application) : AndroidViewModel(application
                 _driverProfile.value = profile
                 FirebaseSyncManager.syncDriverProfile(profile)
                 refreshFleetList(profile)
+            }
+        }
+
+        // Ensure default Master Admin account exists in Firebase
+        val defaultMaster = com.example.data.model.AdminAccount(
+            adminId = "master",
+            name = "Master Admin (Owner)",
+            pin = "1403",
+            role = "MASTER_ADMIN"
+        )
+        FirebaseSyncManager.syncAdminAccount(defaultMaster)
+
+        // Live observe admin accounts from Firebase Realtime DB
+        viewModelScope.launch {
+            try {
+                FirebaseSyncManager.observeAdmins().collect { adminsList ->
+                    _adminAccounts.value = adminsList
+                }
+            } catch (e: Exception) {
+                Log.e("DispatchViewModel", "Error observing admins: ${e.message}")
+            }
+        }
+
+        // Live observe dispatch trip history from Firebase Realtime DB
+        viewModelScope.launch {
+            try {
+                FirebaseSyncManager.observeDispatchHistory().collect { historyList ->
+                    _dispatchHistory.value = historyList
+                }
+            } catch (e: Exception) {
+                Log.e("DispatchViewModel", "Error observing dispatch history: ${e.message}")
             }
         }
 
@@ -186,13 +226,40 @@ class DispatchViewModel(application: Application) : AndroidViewModel(application
     }
 
     fun verifyAdminPin(enteredPin: String): Boolean {
-        return if (enteredPin == _adminPin.value || enteredPin == "1403") {
+        if (enteredPin == _adminPin.value || enteredPin == "1403") {
+            _currentAdmin.value = com.example.data.model.AdminAccount(
+                adminId = "master",
+                name = "Master Admin (Owner)",
+                pin = "1403",
+                role = "MASTER_ADMIN"
+            )
             _isDispatcherAuthenticated.value = true
             _currentRole.value = AppRole.DISPATCHER
-            true
-        } else {
-            false
+            return true
         }
+        val matchedSubAdmin = _adminAccounts.value.find { it.pin == enteredPin }
+        if (matchedSubAdmin != null) {
+            _currentAdmin.value = matchedSubAdmin
+            _isDispatcherAuthenticated.value = true
+            _currentRole.value = AppRole.DISPATCHER
+            return true
+        }
+        return false
+    }
+
+    fun createSubAdmin(name: String, pin: String) {
+        if (name.isBlank() || pin.isBlank()) return
+        val newAdmin = com.example.data.model.AdminAccount(
+            adminId = "sub_${System.currentTimeMillis()}",
+            name = name,
+            pin = pin,
+            role = "SUB_ADMIN"
+        )
+        FirebaseSyncManager.syncAdminAccount(newAdmin)
+    }
+
+    fun deleteSubAdmin(adminId: String) {
+        FirebaseSyncManager.deleteAdminAccount(adminId)
     }
 
     fun removeDriverFromFleet(driverId: String) {
@@ -249,6 +316,7 @@ class DispatchViewModel(application: Application) : AndroidViewModel(application
         notes: String,
         assignedDriverId: String
     ) {
+        val adminName = _currentAdmin.value?.name ?: "Master Admin"
         val newOrder = DispatchOrder(
             orderId = "ORD-${(1000..9999).random()}",
             passengerName = passengerName.ifBlank { "Passenger" },
@@ -258,6 +326,7 @@ class DispatchViewModel(application: Application) : AndroidViewModel(application
             estimatedFare = if (estimatedFare > 0) estimatedFare else 25.00,
             notes = notes,
             assignedDriverId = assignedDriverId,
+            assignedByAdmin = adminName,
             status = DispatchStatus.DISPATCHED
         )
 
@@ -271,6 +340,7 @@ class DispatchViewModel(application: Application) : AndroidViewModel(application
 
         try {
             FirebaseSyncManager.sendDispatchOrder(newOrder)
+            FirebaseSyncManager.saveTripToHistory(newOrder, adminName)
         } catch (e: Exception) {
             Log.e("DispatchViewModel", "Failed to send dispatch order to Firebase", e)
         }

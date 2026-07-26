@@ -48,6 +48,9 @@ fun DispatcherScreen(
     val orders by dispatchViewModel.dispatchOrders.collectAsStateWithLifecycle()
     val drivers by dispatchViewModel.fleetDrivers.collectAsStateWithLifecycle()
     val selfProfile by dispatchViewModel.driverProfile.collectAsStateWithLifecycle()
+    val currentAdmin by dispatchViewModel.currentAdmin.collectAsStateWithLifecycle()
+    val adminAccounts by dispatchViewModel.adminAccounts.collectAsStateWithLifecycle()
+    val dispatchHistory by dispatchViewModel.dispatchHistory.collectAsStateWithLifecycle()
 
     var activeTab by remember { mutableStateOf(0) } // 0 = Dispatch Form, 1 = Fleet Live Status, 2 = Orders Feed
 
@@ -70,6 +73,10 @@ fun DispatcherScreen(
     var newDriverNameInput by remember { mutableStateOf("") }
     var newDriverPlateInput by remember { mutableStateOf("") }
     var isAddDriverExpanded by remember { mutableStateOf(false) }
+
+    var subAdminNameInput by remember { mutableStateOf("") }
+    var subAdminPinInput by remember { mutableStateOf("") }
+    var isSubAdminSectionExpanded by remember { mutableStateOf(false) }
 
     val redBrand = Color(0xFFC62828)
 
@@ -139,6 +146,12 @@ fun DispatcherScreen(
                                 fontSize = 10.sp,
                                 fontWeight = FontWeight.Bold,
                                 color = Color(0xFFFFD600)
+                            )
+                            Text(
+                                text = "Logged in: ${currentAdmin?.name ?: "Master Admin (Owner)"}",
+                                fontSize = 10.sp,
+                                fontWeight = FontWeight.Black,
+                                color = Color.White
                             )
                         }
                     }
@@ -542,6 +555,105 @@ fun DispatcherScreen(
                         }
 
                         item {
+                            // Sub-Admin Management Card (Master Admin Only)
+                            if (currentAdmin == null || currentAdmin?.role == "MASTER_ADMIN" || currentAdmin?.adminId == "master") {
+                                Card(
+                                    colors = CardDefaults.cardColors(containerColor = Color.White),
+                                    shape = RoundedCornerShape(16.dp),
+                                    modifier = Modifier.fillMaxWidth()
+                                ) {
+                                    Column(modifier = Modifier.padding(16.dp)) {
+                                        Row(
+                                            modifier = Modifier
+                                                .fillMaxWidth()
+                                                .clickable { isSubAdminSectionExpanded = !isSubAdminSectionExpanded },
+                                            horizontalArrangement = Arrangement.SpaceBetween,
+                                            verticalAlignment = Alignment.CenterVertically
+                                        ) {
+                                            Row(verticalAlignment = Alignment.CenterVertically) {
+                                                Icon(Icons.Default.AdminPanelSettings, contentDescription = null, tint = redBrand)
+                                                Spacer(modifier = Modifier.width(8.dp))
+                                                Text(
+                                                    text = "SUB-ADMIN MANAGEMENT (MASTER ADMIN)",
+                                                    fontWeight = FontWeight.Bold,
+                                                    fontSize = 13.sp,
+                                                    color = Color(0xFF1E1E1E)
+                                                )
+                                            }
+                                            Icon(
+                                                imageVector = if (isSubAdminSectionExpanded) Icons.Default.ExpandLess else Icons.Default.ExpandMore,
+                                                contentDescription = null,
+                                                tint = Color.Gray
+                                            )
+                                        }
+
+                                        if (isSubAdminSectionExpanded) {
+                                            Spacer(modifier = Modifier.height(12.dp))
+                                            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                                                OutlinedTextField(
+                                                    value = subAdminNameInput,
+                                                    onValueChange = { subAdminNameInput = it },
+                                                    label = { Text("Sub-Admin Name") },
+                                                    singleLine = true,
+                                                    colors = textFieldColors,
+                                                    modifier = Modifier.weight(1f)
+                                                )
+                                                OutlinedTextField(
+                                                    value = subAdminPinInput,
+                                                    onValueChange = { subAdminPinInput = it },
+                                                    label = { Text("Access PIN") },
+                                                    singleLine = true,
+                                                    colors = textFieldColors,
+                                                    modifier = Modifier.weight(1f)
+                                                )
+                                            }
+                                            Spacer(modifier = Modifier.height(8.dp))
+                                            Button(
+                                                onClick = {
+                                                    if (subAdminNameInput.isNotBlank() && subAdminPinInput.isNotBlank()) {
+                                                        dispatchViewModel.createSubAdmin(subAdminNameInput, subAdminPinInput)
+                                                        subAdminNameInput = ""
+                                                        subAdminPinInput = ""
+                                                    }
+                                                },
+                                                colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF2E7D32)),
+                                                shape = RoundedCornerShape(12.dp),
+                                                modifier = Modifier.fillMaxWidth()
+                                            ) {
+                                                Text("CREATE SUB-ADMIN ACCOUNT", fontWeight = FontWeight.Black)
+                                            }
+
+                                            Spacer(modifier = Modifier.height(12.dp))
+                                            Text("Registered Sub-Admins:", fontWeight = FontWeight.Bold, fontSize = 12.sp, color = Color.Gray)
+                                            val subAdminsList = adminAccounts.filter { it.role == "SUB_ADMIN" }
+                                            if (subAdminsList.isEmpty()) {
+                                                Text("No sub-admin accounts created yet.", fontSize = 11.sp, color = Color.Gray)
+                                            } else {
+                                                subAdminsList.forEach { sa ->
+                                                    Row(
+                                                        modifier = Modifier
+                                                            .fillMaxWidth()
+                                                            .padding(vertical = 4.dp),
+                                                        horizontalArrangement = Arrangement.SpaceBetween,
+                                                        verticalAlignment = Alignment.CenterVertically
+                                                    ) {
+                                                        Column {
+                                                            Text(sa.name, fontWeight = FontWeight.Bold, fontSize = 13.sp, color = Color(0xFF1E1E1E))
+                                                            Text("PIN: ${sa.pin}", fontSize = 11.sp, color = Color.Gray)
+                                                        }
+                                                        IconButton(onClick = { dispatchViewModel.deleteSubAdmin(sa.adminId) }) {
+                                                            Icon(Icons.Default.Delete, contentDescription = "Delete", tint = redBrand)
+                                                        }
+                                                    }
+                                                }
+                                            }
+                                        }
+                                    }
+                                }
+                            }
+                        }
+
+                        item {
                             // Broadcast box
                             Card(
                                 colors = CardDefaults.cardColors(containerColor = Color.White),
@@ -673,12 +785,15 @@ fun DispatcherScreen(
                 }
 
                 2 -> {
-                    // DISPATCH ORDERS FEED
+                    // DISPATCH ORDERS & AUDIT HISTORY FEED
+                    val historyOrders = remember(orders, dispatchHistory) {
+                        (orders + dispatchHistory).distinctBy { it.orderId }.sortedByDescending { it.timestamp }
+                    }
                     LazyColumn(
                         verticalArrangement = Arrangement.spacedBy(12.dp),
                         modifier = Modifier.fillMaxSize()
                     ) {
-                        items(orders) { order ->
+                        items(historyOrders) { order ->
                             Card(
                                 colors = CardDefaults.cardColors(containerColor = Color.White),
                                 shape = RoundedCornerShape(16.dp),
@@ -736,11 +851,25 @@ fun DispatcherScreen(
                                         color = redBrand
                                     )
                                     Text(
-                                        text = "Fare: $currencySymbol${String.format("%.2f", order.estimatedFare)} • Assigned to: ${order.assignedDriverId}",
+                                        text = "Fare: $currencySymbol${String.format("%.2f", order.estimatedFare)} • Driver: ${order.assignedDriverId}",
                                         fontSize = 11.sp,
                                         color = Color.Gray,
                                         modifier = Modifier.padding(top = 4.dp)
                                     )
+
+                                    Spacer(modifier = Modifier.height(6.dp))
+                                    Surface(
+                                        color = Color(0xFFEDE7F6),
+                                        shape = RoundedCornerShape(8.dp)
+                                    ) {
+                                        Text(
+                                            text = "Assigned by: ${order.assignedByAdmin.ifBlank { "Master Admin" }}",
+                                            fontSize = 11.sp,
+                                            fontWeight = FontWeight.Bold,
+                                            color = Color(0xFF512DA8),
+                                            modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp)
+                                        )
+                                    }
                                 }
                             }
                         }

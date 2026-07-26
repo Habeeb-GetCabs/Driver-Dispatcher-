@@ -31,6 +31,139 @@ object FirebaseSyncManager {
 
     private val driversRef by lazy { database.getReference("drivers") }
     private val ordersRef by lazy { database.getReference("dispatch_orders") }
+    private val adminsRef by lazy { database.getReference("admins") }
+    private val tripsRef by lazy { database.getReference("trips") }
+    private val historyRef by lazy { database.getReference("dispatch_history") }
+
+    /**
+     * Sync or create an Admin/Sub-Admin account in Firebase under /admins.
+     */
+    fun syncAdminAccount(admin: com.example.data.model.AdminAccount) {
+        if (admin.adminId.isBlank()) return
+        val adminMap = mapOf(
+            "adminId" to admin.adminId,
+            "name" to admin.name,
+            "pin" to admin.pin,
+            "role" to admin.role
+        )
+        adminsRef.child(admin.adminId).setValue(adminMap)
+    }
+
+    /**
+     * Delete sub-admin account from Firebase.
+     */
+    fun deleteAdminAccount(adminId: String) {
+        if (adminId.isBlank()) return
+        adminsRef.child(adminId).removeValue()
+    }
+
+    /**
+     * Listen to all registered admin/sub-admin accounts from Firebase under /admins.
+     */
+    fun observeAdmins(): Flow<List<com.example.data.model.AdminAccount>> = callbackFlow {
+        val listener = object : ValueEventListener {
+            override fun onDataChange(snapshot: DataSnapshot) {
+                val adminsList = mutableListOf<com.example.data.model.AdminAccount>()
+                for (child in snapshot.children) {
+                    try {
+                        val adminId = child.child("adminId").getValue(String::class.java) ?: child.key ?: continue
+                        val name = child.child("name").getValue(String::class.java) ?: "Sub-Admin"
+                        val pin = child.child("pin").getValue(String::class.java) ?: ""
+                        val role = child.child("role").getValue(String::class.java) ?: "SUB_ADMIN"
+                        adminsList.add(com.example.data.model.AdminAccount(adminId, name, pin, role))
+                    } catch (e: Exception) {
+                        Log.e(TAG, "Error parsing admin child: ${e.message}")
+                    }
+                }
+                trySend(adminsList)
+            }
+
+            override fun onCancelled(error: DatabaseError) {
+                Log.e(TAG, "Database error observeAdmins: ${error.message}")
+            }
+        }
+        adminsRef.addValueEventListener(listener)
+        awaitClose { adminsRef.removeEventListener(listener) }
+    }
+
+    /**
+     * Save trip details to /trips/{tripId} and /dispatch_history/{tripId} tagged with assignedByAdmin.
+     */
+    fun saveTripToHistory(order: DispatchOrder, assignedByAdmin: String) {
+        val tripMap = mapOf(
+            "orderId" to order.orderId,
+            "passengerName" to order.passengerName,
+            "passengerPhone" to order.passengerPhone,
+            "pickupAddress" to order.pickupAddress,
+            "destinationAddress" to order.destinationAddress,
+            "estimatedFare" to order.estimatedFare,
+            "notes" to order.notes,
+            "assignedDriverId" to order.assignedDriverId,
+            "assignedByAdmin" to assignedByAdmin,
+            "status" to order.status.name,
+            "timestamp" to order.timestamp
+        )
+
+        tripsRef.child(order.orderId).setValue(tripMap)
+        historyRef.child(order.orderId).setValue(tripMap)
+    }
+
+    /**
+     * Observe full dispatch trip history from /dispatch_history.
+     */
+    fun observeDispatchHistory(): Flow<List<DispatchOrder>> = callbackFlow {
+        val listener = object : ValueEventListener {
+            override fun onDataChange(snapshot: DataSnapshot) {
+                val historyList = mutableListOf<DispatchOrder>()
+                for (child in snapshot.children) {
+                    try {
+                        val orderId = child.child("orderId").getValue(String::class.java) ?: child.key ?: continue
+                        val passengerName = child.child("passengerName").getValue(String::class.java) ?: ""
+                        val passengerPhone = child.child("passengerPhone").getValue(String::class.java) ?: ""
+                        val pickupAddress = child.child("pickupAddress").getValue(String::class.java) ?: ""
+                        val destinationAddress = child.child("destinationAddress").getValue(String::class.java) ?: ""
+                        val estimatedFare = child.child("estimatedFare").getValue(Double::class.java) ?: 0.0
+                        val notes = child.child("notes").getValue(String::class.java) ?: ""
+                        val assignedDriverId = child.child("assignedDriverId").getValue(String::class.java) ?: "ALL"
+                        val assignedByAdmin = child.child("assignedByAdmin").getValue(String::class.java) ?: "Master Admin"
+                        val statusStr = child.child("status").getValue(String::class.java) ?: DispatchStatus.DISPATCHED.name
+                        val timestamp = child.child("timestamp").getValue(Long::class.java) ?: System.currentTimeMillis()
+
+                        val status = try {
+                            DispatchStatus.valueOf(statusStr)
+                        } catch (e: Exception) {
+                            DispatchStatus.DISPATCHED
+                        }
+
+                        historyList.add(
+                            DispatchOrder(
+                                orderId = orderId,
+                                passengerName = passengerName,
+                                passengerPhone = passengerPhone,
+                                pickupAddress = pickupAddress,
+                                destinationAddress = destinationAddress,
+                                estimatedFare = estimatedFare,
+                                notes = notes,
+                                assignedDriverId = assignedDriverId,
+                                assignedByAdmin = assignedByAdmin,
+                                status = status,
+                                timestamp = timestamp
+                            )
+                        )
+                    } catch (e: Exception) {
+                        Log.e(TAG, "Error parsing history child: ${e.message}")
+                    }
+                }
+                trySend(historyList.sortedByDescending { it.timestamp })
+            }
+
+            override fun onCancelled(error: DatabaseError) {
+                Log.e(TAG, "Database error observeDispatchHistory: ${error.message}")
+            }
+        }
+        historyRef.addValueEventListener(listener)
+        awaitClose { historyRef.removeEventListener(listener) }
+    }
 
     /**
      * Publish or update driver profile to Firebase Realtime Database including GPS coordinates under /drivers/{driverId}/location and photoUrl.

@@ -77,6 +77,11 @@ fun HomeMeterScreen(
 
     var showAdminAuthModal by remember { mutableStateOf(false) }
 
+    var showMasterOtpModal by remember { mutableStateOf(false) }
+    var pendingIsAcceptedDispatch by remember { mutableStateOf(false) }
+    var otpInputText by remember { mutableStateOf("") }
+    var isOtpError by remember { mutableStateOf(false) }
+
     val brandRed = Color(0xFFC62828)
 
     // Permission handling states
@@ -125,6 +130,131 @@ fun HomeMeterScreen(
                 dispatchViewModel.declineTrip(order.orderId)
             }
         )
+    }
+
+    // MASTER OTP INPUT DIALOG TO START TAXIMETER
+    if (showMasterOtpModal) {
+        androidx.compose.ui.window.Dialog(
+            onDismissRequest = {
+                showMasterOtpModal = false
+                isOtpError = false
+            }
+        ) {
+            Card(
+                colors = CardDefaults.cardColors(containerColor = Color.White),
+                shape = RoundedCornerShape(24.dp),
+                elevation = CardDefaults.cardElevation(defaultElevation = 8.dp),
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(16.dp)
+            ) {
+                Column(
+                    modifier = Modifier.padding(20.dp),
+                    horizontalAlignment = Alignment.CenterHorizontally,
+                    verticalArrangement = Arrangement.spacedBy(16.dp)
+                ) {
+                    Surface(
+                        color = Color(0xFFFFEBEE),
+                        shape = CircleShape,
+                        modifier = Modifier.size(56.dp)
+                    ) {
+                        Box(contentAlignment = Alignment.Center) {
+                            Icon(
+                                imageVector = Icons.Default.Lock,
+                                contentDescription = "Master OTP Required",
+                                tint = brandRed,
+                                modifier = Modifier.size(28.dp)
+                            )
+                        }
+                    }
+
+                    Text(
+                        text = "MASTER OTP REQUIRED",
+                        fontWeight = FontWeight.Black,
+                        fontSize = 18.sp,
+                        color = Color(0xFF1E1E1E)
+                    )
+
+                    Text(
+                        text = "Driver must enter Master OTP (1404) to unlock taximeter and start ride.",
+                        fontSize = 13.sp,
+                        color = Color(0xFF616161),
+                        textAlign = androidx.compose.ui.text.style.TextAlign.Center
+                    )
+
+                    OutlinedTextField(
+                        value = otpInputText,
+                        onValueChange = {
+                            otpInputText = it
+                            isOtpError = false
+                        },
+                        label = { Text("Enter Master OTP (1404)") },
+                        singleLine = true,
+                        isError = isOtpError,
+                        keyboardOptions = androidx.compose.foundation.text.KeyboardOptions(
+                            keyboardType = androidx.compose.ui.text.input.KeyboardType.Number
+                        ),
+                        colors = OutlinedTextFieldDefaults.colors(
+                            focusedBorderColor = brandRed,
+                            unfocusedBorderColor = Color.Gray,
+                            focusedLabelColor = brandRed,
+                            focusedTextColor = Color(0xFF1E1E1E),
+                            unfocusedTextColor = Color(0xFF1E1E1E)
+                        ),
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .testTag("master_otp_input")
+                    )
+
+                    if (isOtpError) {
+                        Text(
+                            text = "❌ Invalid OTP! Enter Master OTP 1404 to unlock.",
+                            color = brandRed,
+                            fontSize = 12.sp,
+                            fontWeight = FontWeight.Bold
+                        )
+                    }
+
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.spacedBy(12.dp)
+                    ) {
+                        OutlinedButton(
+                            onClick = {
+                                showMasterOtpModal = false
+                                isOtpError = false
+                            },
+                            shape = RoundedCornerShape(12.dp),
+                            modifier = Modifier.weight(1f)
+                        ) {
+                            Text("CANCEL", color = Color.Gray, fontWeight = FontWeight.Bold)
+                        }
+
+                        Button(
+                            onClick = {
+                                if (otpInputText.trim() == "1404") {
+                                    if (pendingIsAcceptedDispatch) {
+                                        dispatchViewModel.startMeterForAcceptedTrip()
+                                    }
+                                    viewModel.startTrip()
+                                    showMasterOtpModal = false
+                                    isOtpError = false
+                                } else {
+                                    isOtpError = true
+                                }
+                            },
+                            colors = ButtonDefaults.buttonColors(containerColor = brandRed),
+                            shape = RoundedCornerShape(12.dp),
+                            modifier = Modifier
+                                .weight(1f)
+                                .testTag("verify_otp_start_meter_button")
+                        ) {
+                            Text("START METER", fontWeight = FontWeight.Black, color = Color.White)
+                        }
+                    }
+                }
+            }
+        }
     }
 
     // IF ROLE IS DISPATCHER -> RENDER DISPATCHER SCREEN HUB
@@ -518,11 +648,13 @@ fun HomeMeterScreen(
 
                         Spacer(modifier = Modifier.height(4.dp))
 
-                        // EXPLICIT TRIGGER BUTTON TO START TAXIMETER
+                        // EXPLICIT TRIGGER BUTTON TO START TAXIMETER WITH MASTER OTP '1404'
                         Button(
                             onClick = {
-                                dispatchViewModel.startMeterForAcceptedTrip()
-                                viewModel.startTrip()
+                                pendingIsAcceptedDispatch = true
+                                otpInputText = ""
+                                isOtpError = false
+                                showMasterOtpModal = true
                             },
                             colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF2E7D32)),
                             shape = RoundedCornerShape(16.dp),
@@ -816,7 +948,12 @@ fun HomeMeterScreen(
                     when (status) {
                         TripStatus.IDLE, TripStatus.FINISHED -> {
                             Button(
-                                onClick = { viewModel.startTrip() },
+                                onClick = {
+                                    pendingIsAcceptedDispatch = false
+                                    otpInputText = ""
+                                    isOtpError = false
+                                    showMasterOtpModal = true
+                                },
                                 colors = ButtonDefaults.buttonColors(
                                     containerColor = Color.White,
                                     contentColor = brandRed
@@ -842,80 +979,25 @@ fun HomeMeterScreen(
                             }
                         }
 
-                        TripStatus.RUNNING -> {
-                            Row(
-                                modifier = Modifier.fillMaxSize(),
-                                horizontalArrangement = Arrangement.spacedBy(12.dp)
+                        TripStatus.RUNNING, TripStatus.PAUSED -> {
+                            Button(
+                                onClick = { viewModel.stopTrip() },
+                                colors = ButtonDefaults.buttonColors(
+                                    containerColor = Color.Black,
+                                    contentColor = Color.White
+                                ),
+                                shape = RoundedCornerShape(32.dp),
+                                modifier = Modifier
+                                    .fillMaxSize()
+                                    .testTag("stop_trip_button")
                             ) {
-                                Button(
-                                    onClick = { viewModel.pauseTrip() },
-                                    colors = ButtonDefaults.buttonColors(containerColor = Color.White),
-                                    shape = RoundedCornerShape(32.dp),
-                                    modifier = Modifier
-                                        .weight(1f)
-                                        .fillMaxHeight()
+                                Row(
+                                    verticalAlignment = Alignment.CenterVertically,
+                                    horizontalArrangement = Arrangement.Center
                                 ) {
-                                    Row(verticalAlignment = Alignment.CenterVertically) {
-                                        Icon(Icons.Default.Pause, contentDescription = null, tint = brandRed)
-                                        Spacer(modifier = Modifier.width(6.dp))
-                                        Text("PAUSE", fontWeight = FontWeight.Black, color = brandRed, letterSpacing = 1.sp)
-                                    }
-                                }
-
-                                Button(
-                                    onClick = { viewModel.stopTrip() },
-                                    colors = ButtonDefaults.buttonColors(
-                                        containerColor = Color.Black,
-                                        contentColor = Color.White
-                                    ),
-                                    shape = RoundedCornerShape(32.dp),
-                                    modifier = Modifier
-                                        .weight(1.3f)
-                                        .fillMaxHeight()
-                                        .testTag("stop_trip_button")
-                                ) {
-                                    Row(verticalAlignment = Alignment.CenterVertically) {
-                                        Icon(Icons.Default.Stop, contentDescription = null, tint = Color.White)
-                                        Spacer(modifier = Modifier.width(6.dp))
-                                        Text("END TRIP", fontWeight = FontWeight.Black, letterSpacing = 1.sp)
-                                    }
-                                }
-                            }
-                        }
-
-                        TripStatus.PAUSED -> {
-                            Row(
-                                modifier = Modifier.fillMaxSize(),
-                                horizontalArrangement = Arrangement.spacedBy(12.dp)
-                            ) {
-                                Button(
-                                    onClick = { viewModel.resumeTrip() },
-                                    colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF00E676)),
-                                    shape = RoundedCornerShape(32.dp),
-                                    modifier = Modifier
-                                        .weight(1.1f)
-                                        .fillMaxHeight()
-                                ) {
-                                    Row(verticalAlignment = Alignment.CenterVertically) {
-                                        Icon(Icons.Default.PlayArrow, contentDescription = null, tint = Color.Black)
-                                        Spacer(modifier = Modifier.width(6.dp))
-                                        Text("RESUME", fontWeight = FontWeight.Black, color = Color.Black, letterSpacing = 1.sp)
-                                    }
-                                }
-
-                                Button(
-                                    onClick = { viewModel.stopTrip() },
-                                    colors = ButtonDefaults.buttonColors(containerColor = Color.Black),
-                                    shape = RoundedCornerShape(32.dp),
-                                    modifier = Modifier
-                                        .weight(1f)
-                                        .fillMaxHeight()
-                                ) {
-                                    Row(verticalAlignment = Alignment.CenterVertically) {
-                                        Icon(Icons.Default.Stop, contentDescription = null, tint = Color.White)
-                                        Spacer(modifier = Modifier.width(6.dp))
-                                        Text("END TRIP", fontWeight = FontWeight.Black, color = Color.White, letterSpacing = 1.sp)
-                                    }
+                                    Icon(Icons.Default.Stop, contentDescription = null, tint = Color.White, modifier = Modifier.size(28.dp))
+                                    Spacer(modifier = Modifier.width(8.dp))
+                                    Text("END TRIP", fontWeight = FontWeight.Black, fontSize = 17.sp, letterSpacing = 1.5.sp)
                                 }
                             }
                         }
