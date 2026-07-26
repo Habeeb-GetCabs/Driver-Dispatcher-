@@ -1,0 +1,688 @@
+package com.example.ui.screens
+
+import androidx.compose.animation.*
+import androidx.compose.foundation.BorderStroke
+import androidx.compose.foundation.background
+import androidx.compose.foundation.border
+import androidx.compose.foundation.clickable
+import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.text.KeyboardOptions
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.*
+import androidx.compose.material3.*
+import androidx.compose.runtime.*
+import androidx.compose.ui.Alignment
+import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.platform.testTag
+import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.input.KeyboardType
+import androidx.compose.ui.text.style.TextAlign
+import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import com.example.data.model.DispatchOrder
+import com.example.data.model.DispatchStatus
+import com.example.viewmodel.DispatchViewModel
+
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+fun DispatcherScreen(
+    dispatchViewModel: DispatchViewModel,
+    currencySymbol: String = "$",
+    onSwitchToMeterMode: () -> Unit
+) {
+    val orders by dispatchViewModel.dispatchOrders.collectAsStateWithLifecycle()
+    val drivers by dispatchViewModel.fleetDrivers.collectAsStateWithLifecycle()
+
+    var activeTab by remember { mutableStateOf(0) } // 0 = Dispatch Form, 1 = Fleet Live Status, 2 = Orders Feed
+
+    // Form inputs
+    var passengerName by remember { mutableStateOf("") }
+    var passengerPhone by remember { mutableStateOf("") }
+    var pickupAddress by remember { mutableStateOf("") }
+    var destinationAddress by remember { mutableStateOf("") }
+    var estimatedFareStr by remember { mutableStateOf("") }
+    var notes by remember { mutableStateOf("") }
+    var selectedDriverId by remember { mutableStateOf("ALL") }
+
+    var broadcastText by remember { mutableStateOf("") }
+    var showSuccessToast by remember { mutableStateOf(false) }
+
+    val redBrand = Color(0xFFC62828)
+
+    Column(
+        modifier = Modifier
+            .fillMaxSize()
+            .background(Color(0xFF8A0000)) // Red Canvas Background
+            .testTag("dispatcher_screen")
+    ) {
+        // Red & White Top Bar Header
+        Surface(
+            color = redBrand,
+            shadowElevation = 6.dp,
+            modifier = Modifier.fillMaxWidth()
+        ) {
+            Column(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(horizontal = 16.dp, vertical = 12.dp)
+            ) {
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        Surface(
+                            color = Color.White,
+                            shape = CircleShape,
+                            modifier = Modifier.size(40.dp)
+                        ) {
+                            Box(contentAlignment = Alignment.Center) {
+                                Icon(
+                                    imageVector = Icons.Default.CellTower,
+                                    contentDescription = "Dispatcher",
+                                    tint = redBrand,
+                                    modifier = Modifier.size(24.dp)
+                                )
+                            }
+                        }
+                        Spacer(modifier = Modifier.width(10.dp))
+                        Column {
+                            Text(
+                                text = "GET TAXI DISPATCH",
+                                fontSize = 18.sp,
+                                fontWeight = FontWeight.Black,
+                                color = Color.White
+                            )
+                            Text(
+                                text = "FLEET CONTROL CENTER",
+                                fontSize = 10.sp,
+                                fontWeight = FontWeight.Bold,
+                                color = Color(0xFFFFD600)
+                            )
+                        }
+                    }
+
+                    // Switch to Meter Mode Button
+                    Button(
+                        onClick = onSwitchToMeterMode,
+                        colors = ButtonDefaults.buttonColors(
+                            containerColor = Color.White,
+                            contentColor = redBrand
+                        ),
+                        shape = RoundedCornerShape(20.dp),
+                        contentPadding = PaddingValues(horizontal = 12.dp, vertical = 6.dp),
+                        modifier = Modifier.testTag("switch_to_driver_mode_button")
+                    ) {
+                        Row(verticalAlignment = Alignment.CenterVertically) {
+                            Icon(
+                                imageVector = Icons.Default.LocalTaxi,
+                                contentDescription = "Meter Mode",
+                                modifier = Modifier.size(16.dp)
+                            )
+                            Spacer(modifier = Modifier.width(6.dp))
+                            Text(
+                                text = "TAXI METER",
+                                fontWeight = FontWeight.Bold,
+                                fontSize = 11.sp
+                            )
+                        }
+                    }
+                }
+
+                Spacer(modifier = Modifier.height(14.dp))
+
+                // Navigation Tabs (Form, Fleet, Orders Feed)
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.spacedBy(8.dp)
+                ) {
+                    TabPill(
+                        title = "DISPATCH TRIP",
+                        icon = Icons.Default.AddLocationAlt,
+                        isSelected = activeTab == 0,
+                        onClick = { activeTab = 0 },
+                        modifier = Modifier.weight(1f)
+                    )
+                    TabPill(
+                        title = "FLEET (${drivers.size})",
+                        icon = Icons.Default.Groups,
+                        isSelected = activeTab == 1,
+                        onClick = { activeTab = 1 },
+                        modifier = Modifier.weight(1f)
+                    )
+                    TabPill(
+                        title = "ORDERS (${orders.size})",
+                        icon = Icons.Default.History,
+                        isSelected = activeTab == 2,
+                        onClick = { activeTab = 2 },
+                        modifier = Modifier.weight(1f)
+                    )
+                }
+            }
+        }
+
+        // Main Content Area
+        Box(
+            modifier = Modifier
+                .fillMaxSize()
+                .padding(16.dp)
+        ) {
+            when (activeTab) {
+                0 -> {
+                    // DISPATCH TRIP FORM
+                    LazyColumn(
+                        verticalArrangement = Arrangement.spacedBy(16.dp),
+                        modifier = Modifier.fillMaxSize()
+                    ) {
+                        item {
+                            Card(
+                                colors = CardDefaults.cardColors(containerColor = Color.White),
+                                shape = RoundedCornerShape(20.dp),
+                                elevation = CardDefaults.cardElevation(defaultElevation = 8.dp),
+                                modifier = Modifier.fillMaxWidth()
+                            ) {
+                                Column(
+                                    modifier = Modifier.padding(20.dp),
+                                    verticalArrangement = Arrangement.spacedBy(14.dp)
+                                ) {
+                                    Row(verticalAlignment = Alignment.CenterVertically) {
+                                        Icon(
+                                            imageVector = Icons.Default.Send,
+                                            contentDescription = null,
+                                            tint = redBrand
+                                        )
+                                        Spacer(modifier = Modifier.width(8.dp))
+                                        Text(
+                                            text = "CREATE NEW DISPATCH ORDER",
+                                            fontWeight = FontWeight.Black,
+                                            fontSize = 16.sp,
+                                            color = Color(0xFF1E1E1E)
+                                        )
+                                    }
+
+                                    HorizontalDivider(color = Color(0xFFEEEEEE))
+
+                                    // Quick Pickup Presets
+                                    Text(
+                                        text = "QUICK PICKUP PRESETS",
+                                        fontSize = 11.sp,
+                                        fontWeight = FontWeight.Bold,
+                                        color = redBrand
+                                    )
+
+                                    Row(
+                                        horizontalArrangement = Arrangement.spacedBy(6.dp),
+                                        modifier = Modifier.fillMaxWidth()
+                                    ) {
+                                        PresetChip("Airport T1", onClick = { pickupAddress = "Airport Terminal 1" })
+                                        PresetChip("Central Station", onClick = { pickupAddress = "Central Station Platform A" })
+                                        PresetChip("Grand Hotel", onClick = { pickupAddress = "Grand Hotel Entrance" })
+                                    }
+
+                                    // Pickup & Dropoff Text Fields
+                                    OutlinedTextField(
+                                        value = pickupAddress,
+                                        onValueChange = { pickupAddress = it },
+                                        label = { Text("Pickup Address / Location") },
+                                        leadingIcon = {
+                                            Icon(Icons.Default.MyLocation, contentDescription = null, tint = Color(0xFF2E7D32))
+                                        },
+                                        singleLine = true,
+                                        modifier = Modifier
+                                            .fillMaxWidth()
+                                            .testTag("input_pickup_address"),
+                                        colors = OutlinedTextFieldDefaults.colors(
+                                            focusedBorderColor = redBrand,
+                                            focusedLabelColor = redBrand
+                                        )
+                                    )
+
+                                    OutlinedTextField(
+                                        value = destinationAddress,
+                                        onValueChange = { destinationAddress = it },
+                                        label = { Text("Destination / Drop-off Location") },
+                                        leadingIcon = {
+                                            Icon(Icons.Default.LocationOn, contentDescription = null, tint = redBrand)
+                                        },
+                                        singleLine = true,
+                                        modifier = Modifier
+                                            .fillMaxWidth()
+                                            .testTag("input_destination_address"),
+                                        colors = OutlinedTextFieldDefaults.colors(
+                                            focusedBorderColor = redBrand,
+                                            focusedLabelColor = redBrand
+                                        )
+                                    )
+
+                                    Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+                                        OutlinedTextField(
+                                            value = passengerName,
+                                            onValueChange = { passengerName = it },
+                                            label = { Text("Passenger Name") },
+                                            leadingIcon = { Icon(Icons.Default.Person, contentDescription = null) },
+                                            singleLine = true,
+                                            modifier = Modifier
+                                                .weight(1f)
+                                                .testTag("input_passenger_name"),
+                                            colors = OutlinedTextFieldDefaults.colors(
+                                                focusedBorderColor = redBrand,
+                                                focusedLabelColor = redBrand
+                                            )
+                                        )
+
+                                        OutlinedTextField(
+                                            value = passengerPhone,
+                                            onValueChange = { passengerPhone = it },
+                                            label = { Text("Phone") },
+                                            leadingIcon = { Icon(Icons.Default.Phone, contentDescription = null) },
+                                            keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Phone),
+                                            singleLine = true,
+                                            modifier = Modifier
+                                                .weight(1f)
+                                                .testTag("input_passenger_phone"),
+                                            colors = OutlinedTextFieldDefaults.colors(
+                                                focusedBorderColor = redBrand,
+                                                focusedLabelColor = redBrand
+                                            )
+                                        )
+                                    }
+
+                                    Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+                                        OutlinedTextField(
+                                            value = estimatedFareStr,
+                                            onValueChange = { estimatedFareStr = it },
+                                            label = { Text("Estimated Fare ($currencySymbol)") },
+                                            leadingIcon = { Icon(Icons.Default.AttachMoney, contentDescription = null) },
+                                            keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
+                                            singleLine = true,
+                                            modifier = Modifier
+                                                .weight(1f)
+                                                .testTag("input_estimated_fare"),
+                                            colors = OutlinedTextFieldDefaults.colors(
+                                                focusedBorderColor = redBrand,
+                                                focusedLabelColor = redBrand
+                                            )
+                                        )
+
+                                        OutlinedTextField(
+                                            value = notes,
+                                            onValueChange = { notes = it },
+                                            label = { Text("Dispatch Notes") },
+                                            singleLine = true,
+                                            modifier = Modifier.weight(1f),
+                                            colors = OutlinedTextFieldDefaults.colors(
+                                                focusedBorderColor = redBrand,
+                                                focusedLabelColor = redBrand
+                                            )
+                                        )
+                                    }
+
+                                    // Driver Selection
+                                    Text(
+                                        text = "ASSIGN TO DRIVER",
+                                        fontSize = 11.sp,
+                                        fontWeight = FontWeight.Bold,
+                                        color = redBrand
+                                    )
+
+                                    Row(
+                                        horizontalArrangement = Arrangement.spacedBy(6.dp),
+                                        modifier = Modifier.fillMaxWidth()
+                                    ) {
+                                        DriverChip(
+                                            label = "BROADCAST ALL",
+                                            isSelected = selectedDriverId == "ALL",
+                                            onClick = { selectedDriverId = "ALL" }
+                                        )
+                                        drivers.take(3).forEach { d ->
+                                            DriverChip(
+                                                label = d.driverId,
+                                                isSelected = selectedDriverId == d.driverId,
+                                                onClick = { selectedDriverId = d.driverId }
+                                            )
+                                        }
+                                    }
+
+                                    Spacer(modifier = Modifier.height(6.dp))
+
+                                    // Dispatch Action Button
+                                    Button(
+                                        onClick = {
+                                            val fare = estimatedFareStr.toDoubleOrNull() ?: 25.0
+                                            dispatchViewModel.dispatchNewTrip(
+                                                passengerName = passengerName,
+                                                passengerPhone = passengerPhone,
+                                                pickup = pickupAddress,
+                                                destination = destinationAddress,
+                                                estimatedFare = fare,
+                                                notes = notes,
+                                                assignedDriverId = selectedDriverId
+                                            )
+                                            // Reset form
+                                            passengerName = ""
+                                            passengerPhone = ""
+                                            pickupAddress = ""
+                                            destinationAddress = ""
+                                            estimatedFareStr = ""
+                                            notes = ""
+                                            showSuccessToast = true
+                                        },
+                                        colors = ButtonDefaults.buttonColors(
+                                            containerColor = redBrand,
+                                            contentColor = Color.White
+                                        ),
+                                        shape = RoundedCornerShape(14.dp),
+                                        modifier = Modifier
+                                            .fillMaxWidth()
+                                            .height(54.dp)
+                                            .testTag("dispatch_now_button")
+                                    ) {
+                                        Row(verticalAlignment = Alignment.CenterVertically) {
+                                            Icon(Icons.Default.Campaign, contentDescription = null)
+                                            Spacer(modifier = Modifier.width(8.dp))
+                                            Text(
+                                                text = "DISPATCH TRIP NOW (SOUND ALERT)",
+                                                fontWeight = FontWeight.Black,
+                                                fontSize = 15.sp
+                                            )
+                                        }
+                                    }
+
+                                    // Test Simulation button
+                                    OutlinedButton(
+                                        onClick = {
+                                            dispatchViewModel.simulateIncomingTripFromDispatcher()
+                                        },
+                                        border = BorderStroke(1.dp, redBrand),
+                                        shape = RoundedCornerShape(12.dp),
+                                        modifier = Modifier.fillMaxWidth()
+                                    ) {
+                                        Text(
+                                            text = "SIMULATE INCOMING DISPATCH TO THIS DEVICE",
+                                            color = redBrand,
+                                            fontWeight = FontWeight.Bold,
+                                            fontSize = 12.sp
+                                        )
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+
+                1 -> {
+                    // FLEET STATUS MONITOR
+                    LazyColumn(
+                        verticalArrangement = Arrangement.spacedBy(12.dp),
+                        modifier = Modifier.fillMaxSize()
+                    ) {
+                        item {
+                            // Broadcast box
+                            Card(
+                                colors = CardDefaults.cardColors(containerColor = Color.White),
+                                shape = RoundedCornerShape(16.dp),
+                                modifier = Modifier.fillMaxWidth()
+                            ) {
+                                Column(modifier = Modifier.padding(16.dp)) {
+                                    Text(
+                                        text = "BROADCAST ANNOUNCEMENT TO ALL DRIVERS",
+                                        fontWeight = FontWeight.Bold,
+                                        fontSize = 13.sp,
+                                        color = redBrand
+                                    )
+                                    Spacer(modifier = Modifier.height(8.dp))
+                                    Row(verticalAlignment = Alignment.CenterVertically) {
+                                        OutlinedTextField(
+                                            value = broadcastText,
+                                            onValueChange = { broadcastText = it },
+                                            placeholder = { Text("e.g., Heavy traffic near Main Depot") },
+                                            singleLine = true,
+                                            modifier = Modifier.weight(1f)
+                                        )
+                                        Spacer(modifier = Modifier.width(8.dp))
+                                        Button(
+                                            onClick = {
+                                                dispatchViewModel.sendBroadcastToDrivers(broadcastText)
+                                                broadcastText = ""
+                                            },
+                                            colors = ButtonDefaults.buttonColors(containerColor = redBrand)
+                                        ) {
+                                            Text("SEND")
+                                        }
+                                    }
+                                }
+                            }
+                        }
+
+                        items(drivers) { driver ->
+                            Card(
+                                colors = CardDefaults.cardColors(containerColor = Color.White),
+                                shape = RoundedCornerShape(16.dp),
+                                modifier = Modifier.fillMaxWidth()
+                            ) {
+                                Row(
+                                    modifier = Modifier
+                                        .padding(16.dp)
+                                        .fillMaxWidth(),
+                                    horizontalArrangement = Arrangement.SpaceBetween,
+                                    verticalAlignment = Alignment.CenterVertically
+                                ) {
+                                    Row(verticalAlignment = Alignment.CenterVertically) {
+                                        Surface(
+                                            color = if (driver.status == "AVAILABLE") Color(0xFFE8F5E9) else Color(0xFFFFEBEE),
+                                            shape = CircleShape,
+                                            modifier = Modifier.size(44.dp)
+                                        ) {
+                                            Box(contentAlignment = Alignment.Center) {
+                                                Icon(
+                                                    imageVector = Icons.Default.DirectionsCar,
+                                                    contentDescription = null,
+                                                    tint = if (driver.status == "AVAILABLE") Color(0xFF2E7D32) else redBrand
+                                                )
+                                            }
+                                        }
+                                        Spacer(modifier = Modifier.width(12.dp))
+                                        Column {
+                                            Text(
+                                                text = "${driver.driverName} (${driver.driverId})",
+                                                fontWeight = FontWeight.Bold,
+                                                fontSize = 15.sp,
+                                                color = Color(0xFF1E1E1E)
+                                            )
+                                            Text(
+                                                text = "Vehicle: ${driver.vehiclePlate} • Loc: ${driver.lastLocation}",
+                                                fontSize = 12.sp,
+                                                color = Color.Gray
+                                            )
+                                        }
+                                    }
+
+                                    Surface(
+                                        color = if (driver.status == "AVAILABLE") Color(0xFF2E7D32) else redBrand,
+                                        shape = RoundedCornerShape(12.dp)
+                                    ) {
+                                        Text(
+                                            text = driver.status,
+                                            color = Color.White,
+                                            fontSize = 10.sp,
+                                            fontWeight = FontWeight.Black,
+                                            modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp)
+                                        )
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+
+                2 -> {
+                    // ORDERS FEED
+                    LazyColumn(
+                        verticalArrangement = Arrangement.spacedBy(12.dp),
+                        modifier = Modifier.fillMaxSize()
+                    ) {
+                        items(orders) { order ->
+                            Card(
+                                colors = CardDefaults.cardColors(containerColor = Color.White),
+                                shape = RoundedCornerShape(16.dp),
+                                modifier = Modifier.fillMaxWidth()
+                            ) {
+                                Column(modifier = Modifier.padding(16.dp)) {
+                                    Row(
+                                        modifier = Modifier.fillMaxWidth(),
+                                        horizontalArrangement = Arrangement.SpaceBetween,
+                                        verticalAlignment = Alignment.CenterVertically
+                                    ) {
+                                        Text(
+                                            text = "Order #${order.orderId}",
+                                            fontWeight = FontWeight.Black,
+                                            fontSize = 16.sp,
+                                            color = redBrand
+                                        )
+
+                                        StatusBadge(status = order.status)
+                                    }
+
+                                    Spacer(modifier = Modifier.height(10.dp))
+
+                                    Text(
+                                        text = "Passenger: ${order.passengerName} (${order.passengerPhone})",
+                                        fontWeight = FontWeight.SemiBold,
+                                        fontSize = 14.sp
+                                    )
+                                    Text(
+                                        text = "📍 Pickup: ${order.pickupAddress}",
+                                        fontSize = 13.sp,
+                                        color = Color(0xFF2E7D32)
+                                    )
+                                    Text(
+                                        text = "🏁 Drop-off: ${order.destinationAddress}",
+                                        fontSize = 13.sp,
+                                        color = redBrand
+                                    )
+
+                                    Spacer(modifier = Modifier.height(8.dp))
+
+                                    Row(
+                                        modifier = Modifier.fillMaxWidth(),
+                                        horizontalArrangement = Arrangement.SpaceBetween,
+                                        verticalAlignment = Alignment.CenterVertically
+                                    ) {
+                                        Text(
+                                            text = "Est. Fare: $currencySymbol${String.format("%.2f", order.estimatedFare)}",
+                                            fontWeight = FontWeight.Bold,
+                                            fontSize = 15.sp,
+                                            color = Color(0xFF1E1E1E)
+                                        )
+
+                                        Text(
+                                            text = "Driver: ${order.assignedDriverId}",
+                                            fontSize = 12.sp,
+                                            color = Color.Gray
+                                        )
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        }
+    }
+}
+
+@Composable
+fun TabPill(
+    title: String,
+    icon: androidx.compose.ui.graphics.vector.ImageVector,
+    isSelected: Boolean,
+    onClick: () -> Unit,
+    modifier: Modifier = Modifier
+) {
+    Surface(
+        color = if (isSelected) Color.White else Color.White.copy(alpha = 0.2f),
+        contentColor = if (isSelected) Color(0xFFC62828) else Color.White,
+        shape = RoundedCornerShape(12.dp),
+        modifier = modifier.clickable { onClick() }
+    ) {
+        Row(
+            modifier = Modifier.padding(vertical = 8.dp, horizontal = 6.dp),
+            horizontalArrangement = Arrangement.Center,
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            Icon(imageVector = icon, contentDescription = null, modifier = Modifier.size(16.dp))
+            Spacer(modifier = Modifier.width(4.dp))
+            Text(
+                text = title,
+                fontSize = 11.sp,
+                fontWeight = FontWeight.Bold
+            )
+        }
+    }
+}
+
+@Composable
+fun PresetChip(label: String, onClick: () -> Unit) {
+    Surface(
+        color = Color(0xFFFFEBEE),
+        shape = RoundedCornerShape(8.dp),
+        modifier = Modifier.clickable { onClick() }
+    ) {
+        Text(
+            text = label,
+            fontSize = 11.sp,
+            fontWeight = FontWeight.Bold,
+            color = Color(0xFFC62828),
+            modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp)
+        )
+    }
+}
+
+@Composable
+fun DriverChip(label: String, isSelected: Boolean, onClick: () -> Unit) {
+    Surface(
+        color = if (isSelected) Color(0xFFC62828) else Color(0xFFEEEEEE),
+        shape = RoundedCornerShape(8.dp),
+        modifier = Modifier.clickable { onClick() }
+    ) {
+        Text(
+            text = label,
+            fontSize = 11.sp,
+            fontWeight = FontWeight.Bold,
+            color = if (isSelected) Color.White else Color(0xFF424242),
+            modifier = Modifier.padding(horizontal = 10.dp, vertical = 6.dp)
+        )
+    }
+}
+
+@Composable
+fun StatusBadge(status: DispatchStatus) {
+    val (bg, txt) = when (status) {
+        DispatchStatus.DISPATCHED -> Color(0xFFFFF3E0) to Color(0xFFE65100)
+        DispatchStatus.ACCEPTED -> Color(0xFFE8F5E9) to Color(0xFF2E7D32)
+        DispatchStatus.IN_PROGRESS -> Color(0xFFE3F2FD) to Color(0xFF1565C0)
+        DispatchStatus.COMPLETED -> Color(0xFFE8F5E9) to Color(0xFF2E7D32)
+        DispatchStatus.DECLINED -> Color(0xFFFFEBEE) to Color(0xFFC62828)
+    }
+
+    Surface(
+        color = bg,
+        shape = RoundedCornerShape(8.dp)
+    ) {
+        Text(
+            text = status.name,
+            fontSize = 11.sp,
+            fontWeight = FontWeight.Black,
+            color = txt,
+            modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp)
+        )
+    }
+}
