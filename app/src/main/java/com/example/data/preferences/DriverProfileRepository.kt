@@ -55,6 +55,11 @@ class DriverProfileRepository(private val context: Context) {
             prefs[KEY_IS_ONLINE] = profile.isOnline
             prefs[KEY_FLEET_CODE] = profile.fleetNetworkCode
         }
+        try {
+            com.example.data.remote.FirebaseSyncManager.syncDriverProfile(profile)
+        } catch (e: Exception) {
+            android.util.Log.e("DriverProfileRepository", "Failed to sync profile to Firebase", e)
+        }
     }
 
     suspend fun updateAdminPin(pin: String) {

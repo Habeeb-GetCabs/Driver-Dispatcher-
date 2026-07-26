@@ -11,6 +11,7 @@ import com.example.data.model.DispatchStatus
 import com.example.data.model.DriverProfile
 import com.example.data.model.DriverUnit
 import com.example.data.preferences.DriverProfileRepository
+import com.example.data.remote.FirebaseSyncManager
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
@@ -52,6 +53,8 @@ class DispatchViewModel(application: Application) : AndroidViewModel(application
     val driverBroadcastMessage: StateFlow<String?> = _driverBroadcastMessage.asStateFlow()
 
     private var toneGenerator: ToneGenerator? = null
+    private val remoteFleetUnits = mutableListOf<DriverUnit>()
+    private val alertedOrderIds = mutableSetOf<String>()
 
     init {
         try {
@@ -63,6 +66,7 @@ class DispatchViewModel(application: Application) : AndroidViewModel(application
         viewModelScope.launch {
             profileRepository.driverProfileFlow.collect { profile ->
                 _driverProfile.value = profile
+                FirebaseSyncManager.syncDriverProfile(profile)
                 refreshFleetList(profile)
             }
         }
@@ -73,52 +77,75 @@ class DispatchViewModel(application: Application) : AndroidViewModel(application
             }
         }
 
-        // Initialize sample dispatched orders
-        _dispatchOrders.value = listOf(
-            DispatchOrder(
-                orderId = "ORD-9021",
-                passengerName = "David Miller",
-                passengerPhone = "+1 555-0192",
-                pickupAddress = "Terminal 2, International Airport",
-                destinationAddress = "Hilton Plaza Hotel, Downtown",
-                estimatedFare = 34.50,
-                notes = "Passenger has 2 suitcases",
-                assignedDriverId = "ALL",
-                status = DispatchStatus.DISPATCHED
-            ),
-            DispatchOrder(
-                orderId = "ORD-8994",
-                passengerName = "Emma Watson",
-                passengerPhone = "+1 555-8821",
-                pickupAddress = "Central Train Station",
-                destinationAddress = "742 Evergreen Terrace",
-                estimatedFare = 18.20,
-                notes = "VIP Express Ride",
-                assignedDriverId = "DRV-102",
-                status = DispatchStatus.ACCEPTED
+        // Live observe fleet drivers across all devices via Firebase
+        viewModelScope.launch {
+            try {
+                FirebaseSyncManager.observeFleetDrivers().collect { liveDrivers ->
+                    remoteFleetUnits.clear()
+                    remoteFleetUnits.addAll(liveDrivers)
+                    refreshFleetList(_driverProfile.value)
+                }
+            } catch (e: Exception) {
+                Log.e("DispatchViewModel", "Error observing fleet drivers: ${e.message}")
+            }
+        }
+
+        // Live observe dispatch orders across all devices via Firebase
+        viewModelScope.launch {
+            try {
+                FirebaseSyncManager.observeDispatchOrders().collect { remoteOrders ->
+                    if (remoteOrders.isNotEmpty()) {
+                        _dispatchOrders.value = remoteOrders
+                        val myDriverId = _driverProfile.value.driverId
+                        val newDispatchedOrder = remoteOrders.firstOrNull { order ->
+                            order.status == DispatchStatus.DISPATCHED &&
+                                    (order.assignedDriverId == "ALL" || order.assignedDriverId == myDriverId) &&
+                                    !alertedOrderIds.contains(order.orderId)
+                        }
+
+                        if (newDispatchedOrder != null) {
+                            alertedOrderIds.add(newDispatchedOrder.orderId)
+                            _activeAlertTrip.value = newDispatchedOrder
+                            playDispatchAlertSound()
+                        }
+                    }
+                }
+            } catch (e: Exception) {
+                Log.e("DispatchViewModel", "Error observing dispatch orders: ${e.message}")
+            }
+        }
+
+        // Initialize fallback sample dispatched orders if empty
+        if (_dispatchOrders.value.isEmpty()) {
+            _dispatchOrders.value = listOf(
+                DispatchOrder(
+                    orderId = "ORD-9021",
+                    passengerName = "David Miller",
+                    passengerPhone = "+1 555-0192",
+                    pickupAddress = "Terminal 2, International Airport",
+                    destinationAddress = "Hilton Plaza Hotel, Downtown",
+                    estimatedFare = 34.50,
+                    notes = "Passenger has 2 suitcases",
+                    assignedDriverId = "ALL",
+                    status = DispatchStatus.DISPATCHED
+                )
             )
-        )
+        }
     }
 
     private val customFleetUnits = mutableListOf<DriverUnit>()
 
     private fun refreshFleetList(selfProfile: DriverProfile) {
-        val defaultFleet = listOf(
-            DriverUnit("DRV-101", "Alex Rivers", "TX-8821", "AVAILABLE", 92, "Main St & 5th Ave"),
-            DriverUnit("DRV-102", "Marco Rossi", "TX-3104", "ON_TRIP", 84, "Airport Terminal 1"),
-            DriverUnit("DRV-103", "Sarah Jenkins", "TX-5590", "AVAILABLE", 98, "Grand Central Depot")
-        )
-
         val selfUnit = DriverUnit(
             driverId = selfProfile.driverId,
             driverName = "${selfProfile.driverName} (This Device)",
             vehiclePlate = selfProfile.vehiclePlate,
             status = selfProfile.status,
-            batteryPercent = 99,
+            batteryPercent = selfProfile.batteryPercent,
             lastLocation = selfProfile.lastLocationName
         )
 
-        val combined = listOf(selfUnit) + customFleetUnits + defaultFleet
+        val combined = listOf(selfUnit) + remoteFleetUnits + customFleetUnits
         _fleetDrivers.value = combined.distinctBy { it.driverId }
     }
 
@@ -213,6 +240,12 @@ class DispatchViewModel(application: Application) : AndroidViewModel(application
         if (assignedDriverId == "ALL" || assignedDriverId == selfId) {
             _activeAlertTrip.value = newOrder
         }
+
+        try {
+            FirebaseSyncManager.sendDispatchOrder(newOrder)
+        } catch (e: Exception) {
+            Log.e("DispatchViewModel", "Failed to send dispatch order to Firebase", e)
+        }
     }
 
     fun simulateIncomingTripFromDispatcher() {
@@ -231,6 +264,12 @@ class DispatchViewModel(application: Application) : AndroidViewModel(application
         _dispatchOrders.value = listOf(sampleOrder) + _dispatchOrders.value
         _activeAlertTrip.value = sampleOrder
         playDispatchAlertSound()
+
+        try {
+            FirebaseSyncManager.sendDispatchOrder(sampleOrder)
+        } catch (e: Exception) {
+            Log.e("DispatchViewModel", "Failed to send simulated order to Firebase", e)
+        }
     }
 
     fun acceptTrip(orderId: String) {
@@ -241,6 +280,12 @@ class DispatchViewModel(application: Application) : AndroidViewModel(application
             _activeAlertTrip.value = null
         }
         _currentRole.value = AppRole.DRIVER
+
+        try {
+            FirebaseSyncManager.updateOrderStatus(orderId, DispatchStatus.ACCEPTED)
+        } catch (e: Exception) {
+            Log.e("DispatchViewModel", "Failed to update order status to Firebase", e)
+        }
     }
 
     fun declineTrip(orderId: String) {
@@ -249,6 +294,12 @@ class DispatchViewModel(application: Application) : AndroidViewModel(application
         }
         if (_activeAlertTrip.value?.orderId == orderId) {
             _activeAlertTrip.value = null
+        }
+
+        try {
+            FirebaseSyncManager.updateOrderStatus(orderId, DispatchStatus.DECLINED)
+        } catch (e: Exception) {
+            Log.e("DispatchViewModel", "Failed to update order status to Firebase", e)
         }
     }
 
