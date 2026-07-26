@@ -22,12 +22,12 @@ jobs:
 
       - name: Ensure Gradle Wrapper
         run: |
-          if [ ! -f ./gradlew ]; then
-            gradle wrapper --gradle-version 9.3.1
+          if [ -f ./gradlew ]; then
+            chmod +x gradlew
           else
-            ./gradlew wrapper --gradle-version 9.3.1
+            gradle wrapper
+            chmod +x gradlew
           fi
-          chmod +x gradlew
 
       - name: Setup Keystore
         run: |
