@@ -4,6 +4,7 @@ import android.Manifest
 import android.content.Context
 import android.content.pm.PackageManager
 import android.os.Build
+import androidx.activity.compose.BackHandler
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.animation.*
@@ -87,6 +88,31 @@ fun HomeMeterScreen(
     var showSettingsPinModal by remember { mutableStateOf(false) }
     var settingsPinInput by remember { mutableStateOf("") }
     var isSettingsPinError by remember { mutableStateOf(false) }
+
+    var lastBackPressTime by remember { mutableLongStateOf(0L) }
+
+    BackHandler(enabled = true) {
+        val currentTime = System.currentTimeMillis()
+        if (showSettingsPinModal) {
+            showSettingsPinModal = false
+            return@BackHandler
+        }
+        if (showMasterOtpModal) {
+            showMasterOtpModal = false
+            return@BackHandler
+        }
+        if (showAdminAuthModal) {
+            showAdminAuthModal = false
+            return@BackHandler
+        }
+
+        if (currentTime - lastBackPressTime < 2000) {
+            (context as? android.app.Activity)?.finish()
+        } else {
+            lastBackPressTime = currentTime
+            android.widget.Toast.makeText(context, "Press back again to exit", android.widget.Toast.LENGTH_SHORT).show()
+        }
+    }
 
     val brandRed = Color(0xFFC62828)
 

@@ -76,6 +76,11 @@ class DispatchViewModel(application: Application) : AndroidViewModel(application
         }
 
         viewModelScope.launch {
+            try {
+                profileRepository.ensureDriverIdAssigned()
+            } catch (e: Exception) {
+                Log.e("DispatchViewModel", "Failed to ensure sequential Driver ID: ${e.message}")
+            }
             profileRepository.driverProfileFlow.collect { profile ->
                 _driverProfile.value = profile
                 FirebaseSyncManager.syncDriverProfile(profile)

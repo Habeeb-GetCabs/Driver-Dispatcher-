@@ -26,10 +26,10 @@ class DriverProfileRepository(private val context: Context) {
     }
 
     val driverProfileFlow: Flow<DriverProfile> = context.driverDataStore.data.map { prefs ->
-        val existingId = prefs[KEY_DRIVER_ID] ?: "DRV-${(105..999).random()}"
+        val existingId = prefs[KEY_DRIVER_ID] ?: ""
         DriverProfile(
-            driverId = existingId,
-            driverName = prefs[KEY_DRIVER_NAME] ?: "Driver ${existingId.takeLast(3)}",
+            driverId = existingId.ifBlank { "DRV-0011" },
+            driverName = prefs[KEY_DRIVER_NAME] ?: "Driver ${existingId.takeLast(4).ifBlank { "0011" }}",
             phoneNumber = prefs[KEY_PHONE_NUMBER] ?: "+1 555-0100",
             vehiclePlate = prefs[KEY_VEHICLE_PLATE] ?: "TAX-${(100..999).random()}",
             vehicleModel = prefs[KEY_VEHICLE_MODEL] ?: "Sedan Taxi",
@@ -38,6 +38,24 @@ class DriverProfileRepository(private val context: Context) {
             status = if (prefs[KEY_IS_ONLINE] != false) "AVAILABLE" else "OFFLINE",
             fleetNetworkCode = prefs[KEY_FLEET_CODE] ?: "GET-TAXI-NETWORK-1"
         )
+    }
+
+    suspend fun ensureDriverIdAssigned(): DriverProfile {
+        val prefs = context.driverDataStore.data.first()
+        val existingId = prefs[KEY_DRIVER_ID]
+        if (existingId.isNullOrBlank()) {
+            val newId = com.example.data.remote.FirebaseSyncManager.getOrGenerateSequentialDriverId()
+            val defaultName = if (prefs[KEY_DRIVER_NAME].isNullOrBlank() || prefs[KEY_DRIVER_NAME]?.startsWith("Driver ") == true) {
+                "Driver ${newId.takeLast(4)}"
+            } else {
+                prefs[KEY_DRIVER_NAME]!!
+            }
+            context.driverDataStore.edit { p ->
+                p[KEY_DRIVER_ID] = newId
+                p[KEY_DRIVER_NAME] = defaultName
+            }
+        }
+        return driverProfileFlow.first()
     }
 
     val adminPinFlow: Flow<String> = context.driverDataStore.data.map { prefs ->

@@ -14,6 +14,7 @@ import com.google.firebase.database.ValueEventListener
 import kotlinx.coroutines.channels.awaitClose
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.callbackFlow
+import kotlin.coroutines.resume
 import java.util.Locale
 
 object FirebaseSyncManager {
@@ -462,5 +463,42 @@ object FirebaseSyncManager {
 
         ordersRef.addValueEventListener(listener)
         awaitClose { ordersRef.removeEventListener(listener) }
+    }
+
+    /**
+     * Sequential driver ID auto-increment generator in Firebase under /metadata/lastDriverId.
+     * Starting index: 11 (reserving IDs 1 through 10 exclusively for Admin/Internal testing).
+     * Format: DRV-%04d (e.g., DRV-0011, DRV-0012, DRV-0013, ...)
+     */
+    suspend fun getOrGenerateSequentialDriverId(): String = kotlinx.coroutines.suspendCancellableCoroutine { continuation ->
+        val lastIdRef = database.getReference("metadata").child("lastDriverId")
+        lastIdRef.runTransaction(object : Transaction.Handler {
+            override fun doTransaction(mutableData: MutableData): Transaction.Result {
+                val currentVal = mutableData.getValue(Long::class.java)
+                val nextVal = if (currentVal == null || currentVal < 10L) 11L else currentVal + 1L
+                mutableData.value = nextVal
+                return Transaction.success(mutableData)
+            }
+
+            override fun onComplete(
+                error: DatabaseError?,
+                committed: Boolean,
+                currentData: DataSnapshot?
+            ) {
+                if (committed && currentData != null && error == null) {
+                    val assignedNum = currentData.getValue(Long::class.java) ?: 11L
+                    val formattedId = String.format(Locale.US, "DRV-%04d", assignedNum)
+                    if (continuation.isActive) {
+                        continuation.resume(formattedId)
+                    }
+                } else {
+                    Log.e(TAG, "Driver ID transaction failed: ${error?.message}")
+                    val fallbackId = String.format(Locale.US, "DRV-%04d", (11..99).random())
+                    if (continuation.isActive) {
+                        continuation.resume(fallbackId)
+                    }
+                }
+            }
+        })
     }
 }

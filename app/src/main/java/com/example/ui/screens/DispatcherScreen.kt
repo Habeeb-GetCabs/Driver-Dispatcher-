@@ -1,5 +1,6 @@
 package com.example.ui.screens
 
+import androidx.activity.compose.BackHandler
 import androidx.compose.animation.*
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.Image
@@ -9,6 +10,8 @@ import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.KeyboardOptions
@@ -26,6 +29,7 @@ import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.text.style.TextAlign
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
@@ -87,6 +91,27 @@ fun DispatcherScreen(
     // Selected driver for inspection
     var selectedDriverForDetails by remember { mutableStateOf<DriverUnit?>(null) }
 
+    var lastBackPressTime by remember { mutableLongStateOf(0L) }
+
+    BackHandler(enabled = true) {
+        val currentTime = System.currentTimeMillis()
+        if (selectedDriverForDetails != null) {
+            selectedDriverForDetails = null
+            return@BackHandler
+        }
+        if (activeTab != 0) {
+            activeTab = 0
+            return@BackHandler
+        }
+
+        if (currentTime - lastBackPressTime < 2000) {
+            (context as? android.app.Activity)?.finish()
+        } else {
+            lastBackPressTime = currentTime
+            android.widget.Toast.makeText(context, "Press back again to exit", android.widget.Toast.LENGTH_SHORT).show()
+        }
+    }
+
     // Form inputs
     var passengerName by remember { mutableStateOf("") }
     var passengerPhone by remember { mutableStateOf("") }
@@ -97,6 +122,26 @@ fun DispatcherScreen(
     var customRatePerKmStr by remember { mutableStateOf("") }
     var notes by remember { mutableStateOf("") }
     var selectedDriverId by remember { mutableStateOf("ALL") }
+
+    var dispatchDriverSearchQuery by remember { mutableStateOf("") }
+
+    val dispatchFilteredDrivers = remember(drivers, dispatchDriverSearchQuery) {
+        if (dispatchDriverSearchQuery.isBlank()) {
+            drivers
+        } else {
+            val q = dispatchDriverSearchQuery.trim().lowercase(java.util.Locale.ROOT)
+            drivers.filter { driver ->
+                val resolvedLoc = getResolvedLocationName(context, driver).lowercase(java.util.Locale.ROOT)
+                driver.driverName.lowercase(java.util.Locale.ROOT).contains(q) ||
+                driver.driverId.lowercase(java.util.Locale.ROOT).contains(q) ||
+                "drv-${driver.driverId.lowercase(java.util.Locale.ROOT)}".contains(q) ||
+                driver.vehiclePlate.lowercase(java.util.Locale.ROOT).contains(q) ||
+                driver.phoneNumber.lowercase(java.util.Locale.ROOT).contains(q) ||
+                driver.lastLocation.lowercase(java.util.Locale.ROOT).contains(q) ||
+                resolvedLoc.contains(q)
+            }
+        }
+    }
 
     var fleetSearchQuery by remember { mutableStateOf("") }
 
@@ -435,29 +480,218 @@ fun DispatcherScreen(
                                         )
                                     }
 
-                                    // Driver Selection
+                                    // Driver Selection Header
                                     Text(
-                                        text = "ASSIGN TO DRIVER",
+                                        text = "ASSIGN TO DRIVER OR BROADCAST",
                                         fontSize = 11.sp,
                                         fontWeight = FontWeight.Bold,
                                         color = redBrand
                                     )
 
-                                    Row(
-                                        horizontalArrangement = Arrangement.spacedBy(6.dp),
-                                        modifier = Modifier.fillMaxWidth()
+                                    // Driver Search Field
+                                    OutlinedTextField(
+                                        value = dispatchDriverSearchQuery,
+                                        onValueChange = { dispatchDriverSearchQuery = it },
+                                        placeholder = { Text("Search driver by Name, ID (DRV-0011), or Location (Gandhipuram)...") },
+                                        leadingIcon = { Icon(Icons.Default.Search, contentDescription = null, tint = redBrand) },
+                                        trailingIcon = {
+                                            if (dispatchDriverSearchQuery.isNotEmpty()) {
+                                                IconButton(onClick = { dispatchDriverSearchQuery = "" }) {
+                                                    Icon(Icons.Default.Clear, contentDescription = "Clear", tint = Color.Gray)
+                                                }
+                                            }
+                                        },
+                                        singleLine = true,
+                                        colors = textFieldColors,
+                                        modifier = Modifier
+                                            .fillMaxWidth()
+                                            .testTag("dispatch_driver_search_input")
+                                    )
+
+                                    // Prominent Broadcast All Option
+                                    Card(
+                                        colors = CardDefaults.cardColors(
+                                            containerColor = if (selectedDriverId == "ALL") Color(0xFFFFEBEE) else Color(0xFFF8F9FA)
+                                        ),
+                                        border = if (selectedDriverId == "ALL") BorderStroke(2.dp, redBrand) else BorderStroke(1.dp, Color(0xFFE0E0E0)),
+                                        shape = RoundedCornerShape(12.dp),
+                                        modifier = Modifier
+                                            .fillMaxWidth()
+                                            .clickable { selectedDriverId = "ALL" }
+                                            .testTag("broadcast_all_driver_option")
                                     ) {
-                                        DriverChip(
-                                            label = "BROADCAST ALL",
-                                            isSelected = selectedDriverId == "ALL",
-                                            onClick = { selectedDriverId = "ALL" }
+                                        Row(
+                                            verticalAlignment = Alignment.CenterVertically,
+                                            horizontalArrangement = Arrangement.SpaceBetween,
+                                            modifier = Modifier.padding(horizontal = 14.dp, vertical = 12.dp)
+                                        ) {
+                                            Row(
+                                                verticalAlignment = Alignment.CenterVertically,
+                                                modifier = Modifier.weight(1f)
+                                            ) {
+                                                Surface(
+                                                    color = if (selectedDriverId == "ALL") redBrand else Color.Gray,
+                                                    shape = CircleShape,
+                                                    modifier = Modifier.size(32.dp)
+                                                ) {
+                                                    Box(contentAlignment = Alignment.Center) {
+                                                        Icon(
+                                                            imageVector = Icons.Default.RssFeed,
+                                                            contentDescription = null,
+                                                            tint = Color.White,
+                                                            modifier = Modifier.size(18.dp)
+                                                        )
+                                                    }
+                                                }
+                                                Spacer(modifier = Modifier.width(10.dp))
+                                                Column {
+                                                    Text(
+                                                        text = "BROADCAST TO ALL DRIVERS",
+                                                        fontWeight = FontWeight.Black,
+                                                        fontSize = 12.sp,
+                                                        color = if (selectedDriverId == "ALL") redBrand else Color(0xFF1E1E1E)
+                                                    )
+                                                    Text(
+                                                        text = "First available driver in fleet can accept order",
+                                                        fontSize = 11.sp,
+                                                        color = Color.Gray
+                                                    )
+                                                }
+                                            }
+                                            if (selectedDriverId == "ALL") {
+                                                Icon(
+                                                    imageVector = Icons.Default.CheckCircle,
+                                                    contentDescription = "Selected",
+                                                    tint = redBrand,
+                                                    modifier = Modifier.size(20.dp)
+                                                )
+                                            }
+                                        }
+                                    }
+
+                                    // Filtered Drivers List
+                                    if (dispatchFilteredDrivers.isEmpty()) {
+                                        Text(
+                                            text = "No drivers matching \"$dispatchDriverSearchQuery\"",
+                                            fontSize = 12.sp,
+                                            color = Color.Gray,
+                                            modifier = Modifier.padding(vertical = 6.dp)
                                         )
-                                        drivers.take(8).forEach { d ->
-                                            DriverChip(
-                                                label = d.driverId,
-                                                isSelected = selectedDriverId == d.driverId,
-                                                onClick = { selectedDriverId = d.driverId }
-                                            )
+                                    } else {
+                                        Column(
+                                            verticalArrangement = Arrangement.spacedBy(6.dp),
+                                            modifier = Modifier
+                                                .fillMaxWidth()
+                                                .heightIn(max = 220.dp)
+                                                .verticalScroll(rememberScrollState())
+                                        ) {
+                                            dispatchFilteredDrivers.forEach { d ->
+                                                val isSelected = selectedDriverId == d.driverId
+                                                val resolvedLoc = getResolvedLocationName(context, d)
+                                                val formattedDriverId = if (d.driverId.startsWith("DRV-")) d.driverId else "DRV-${d.driverId}"
+
+                                                Card(
+                                                    colors = CardDefaults.cardColors(
+                                                        containerColor = if (isSelected) Color(0xFFE8F5E9) else Color(0xFFFAFAFA)
+                                                    ),
+                                                    border = if (isSelected) BorderStroke(2.dp, Color(0xFF2E7D32)) else BorderStroke(1.dp, Color(0xFFE0E0E0)),
+                                                    shape = RoundedCornerShape(12.dp),
+                                                    modifier = Modifier
+                                                        .fillMaxWidth()
+                                                        .clickable { selectedDriverId = d.driverId }
+                                                        .testTag("assign_driver_item_${d.driverId}")
+                                                ) {
+                                                    Row(
+                                                        verticalAlignment = Alignment.CenterVertically,
+                                                        horizontalArrangement = Arrangement.SpaceBetween,
+                                                        modifier = Modifier.padding(horizontal = 12.dp, vertical = 10.dp)
+                                                    ) {
+                                                        Row(
+                                                            verticalAlignment = Alignment.CenterVertically,
+                                                            modifier = Modifier.weight(1f)
+                                                        ) {
+                                                            Surface(
+                                                                color = if (isSelected) Color(0xFF2E7D32) else redBrand,
+                                                                shape = CircleShape,
+                                                                modifier = Modifier.size(34.dp)
+                                                            ) {
+                                                                Box(contentAlignment = Alignment.Center) {
+                                                                    Text(
+                                                                        text = d.driverName.take(1).uppercase(),
+                                                                        color = Color.White,
+                                                                        fontWeight = FontWeight.Bold,
+                                                                        fontSize = 14.sp
+                                                                    )
+                                                                }
+                                                            }
+                                                            Spacer(modifier = Modifier.width(10.dp))
+                                                            Column {
+                                                                Row(verticalAlignment = Alignment.CenterVertically) {
+                                                                    Text(
+                                                                        text = d.driverName,
+                                                                        fontWeight = FontWeight.Bold,
+                                                                        fontSize = 13.sp,
+                                                                        color = Color(0xFF1E1E1E)
+                                                                    )
+                                                                    Spacer(modifier = Modifier.width(6.dp))
+                                                                    Surface(
+                                                                        color = Color(0xFFFFD600),
+                                                                        shape = RoundedCornerShape(6.dp)
+                                                                    ) {
+                                                                        Text(
+                                                                            text = formattedDriverId,
+                                                                            fontSize = 10.sp,
+                                                                            fontWeight = FontWeight.Black,
+                                                                            color = Color.Black,
+                                                                            modifier = Modifier.padding(horizontal = 4.dp, vertical = 1.dp)
+                                                                        )
+                                                                    }
+                                                                }
+                                                                Row(verticalAlignment = Alignment.CenterVertically) {
+                                                                    Icon(
+                                                                        imageVector = Icons.Default.LocationOn,
+                                                                        contentDescription = null,
+                                                                        tint = Color.Gray,
+                                                                        modifier = Modifier.size(12.dp)
+                                                                    )
+                                                                    Spacer(modifier = Modifier.width(2.dp))
+                                                                    Text(
+                                                                        text = resolvedLoc,
+                                                                        fontSize = 11.sp,
+                                                                        color = Color.Gray,
+                                                                        maxLines = 1,
+                                                                        overflow = TextOverflow.Ellipsis
+                                                                    )
+                                                                }
+                                                            }
+                                                        }
+
+                                                        Column(horizontalAlignment = Alignment.End) {
+                                                            Surface(
+                                                                color = if (d.status == "AVAILABLE" || d.status == "ONLINE") Color(0xFFE8F5E9) else Color(0xFFFFF3E0),
+                                                                shape = RoundedCornerShape(8.dp)
+                                                            ) {
+                                                                Text(
+                                                                    text = d.status,
+                                                                    fontSize = 10.sp,
+                                                                    fontWeight = FontWeight.Bold,
+                                                                    color = if (d.status == "AVAILABLE" || d.status == "ONLINE") Color(0xFF2E7D32) else Color(0xFFE65100),
+                                                                    modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp)
+                                                                )
+                                                            }
+                                                            if (isSelected) {
+                                                                Spacer(modifier = Modifier.height(2.dp))
+                                                                Icon(
+                                                                    imageVector = Icons.Default.CheckCircle,
+                                                                    contentDescription = "Assigned",
+                                                                    tint = Color(0xFF2E7D32),
+                                                                    modifier = Modifier.size(18.dp)
+                                                                )
+                                                            }
+                                                        }
+                                                    }
+                                                }
+                                            }
                                         }
                                     }
 
