@@ -42,6 +42,7 @@ fun DriverProfileScreen(
     val context = LocalContext.current
     val currentProfile by dispatchViewModel.driverProfile.collectAsState()
 
+    var customDriverId by remember(currentProfile) { mutableStateOf(currentProfile.driverId) }
     var name by remember(currentProfile) { mutableStateOf(currentProfile.driverName) }
     var phone by remember(currentProfile) { mutableStateOf(currentProfile.phoneNumber) }
     var vehiclePlate by remember(currentProfile) { mutableStateOf(currentProfile.vehiclePlate) }
@@ -174,7 +175,7 @@ fun DriverProfileScreen(
                         modifier = Modifier.padding(top = 6.dp)
                     ) {
                         Text(
-                            text = currentProfile.driverId,
+                            text = customDriverId.ifBlank { currentProfile.driverId },
                             color = Color.Black,
                             fontWeight = FontWeight.Black,
                             fontSize = 22.sp,
@@ -214,6 +215,19 @@ fun DriverProfileScreen(
                     )
 
                     HorizontalDivider(color = Color(0xFFEEEEEE))
+
+                    // Driver Assigned ID field
+                    OutlinedTextField(
+                        value = customDriverId,
+                        onValueChange = { customDriverId = it },
+                        label = { Text("Driver ID (e.g., DRV-667 or 684)") },
+                        leadingIcon = { Icon(Icons.Default.Badge, contentDescription = null) },
+                        singleLine = true,
+                        colors = textFieldColors,
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .testTag("input_driver_id")
+                    )
 
                     // Full Name
                     OutlinedTextField(
@@ -315,6 +329,7 @@ fun DriverProfileScreen(
                     Button(
                         onClick = {
                             val updated = currentProfile.copy(
+                                driverId = customDriverId.ifBlank { currentProfile.driverId },
                                 driverName = name,
                                 phoneNumber = phone,
                                 vehiclePlate = vehiclePlate,

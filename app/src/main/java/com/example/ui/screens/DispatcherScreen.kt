@@ -64,6 +64,11 @@ fun DispatcherScreen(
     var broadcastText by remember { mutableStateOf("") }
     var showSuccessToast by remember { mutableStateOf(false) }
 
+    var newDriverIdInput by remember { mutableStateOf("") }
+    var newDriverNameInput by remember { mutableStateOf("") }
+    var newDriverPlateInput by remember { mutableStateOf("") }
+    var isAddDriverExpanded by remember { mutableStateOf(false) }
+
     val redBrand = Color(0xFFC62828)
 
     // Standardized text field colors ensuring 100% dark text visibility
@@ -366,7 +371,7 @@ fun DispatcherScreen(
                                             isSelected = selectedDriverId == "ALL",
                                             onClick = { selectedDriverId = "ALL" }
                                         )
-                                        drivers.take(3).forEach { d ->
+                                        drivers.take(8).forEach { d ->
                                             DriverChip(
                                                 label = d.driverId,
                                                 isSelected = selectedDriverId == d.driverId,
@@ -464,6 +469,93 @@ fun DispatcherScreen(
                         verticalArrangement = Arrangement.spacedBy(12.dp),
                         modifier = Modifier.fillMaxSize()
                     ) {
+                        item {
+                            // Add Driver Card
+                            Card(
+                                colors = CardDefaults.cardColors(containerColor = Color.White),
+                                shape = RoundedCornerShape(16.dp),
+                                modifier = Modifier.fillMaxWidth()
+                            ) {
+                                Column(modifier = Modifier.padding(16.dp)) {
+                                    Row(
+                                        modifier = Modifier
+                                            .fillMaxWidth()
+                                            .clickable { isAddDriverExpanded = !isAddDriverExpanded },
+                                        horizontalArrangement = Arrangement.SpaceBetween,
+                                        verticalAlignment = Alignment.CenterVertically
+                                    ) {
+                                        Row(verticalAlignment = Alignment.CenterVertically) {
+                                            Icon(Icons.Default.PersonAdd, contentDescription = null, tint = redBrand)
+                                            Spacer(modifier = Modifier.width(8.dp))
+                                            Text(
+                                                text = "REGISTER DRIVER ID (e.g. 667, 684)",
+                                                fontWeight = FontWeight.Bold,
+                                                fontSize = 13.sp,
+                                                color = Color(0xFF1E1E1E)
+                                            )
+                                        }
+                                        Icon(
+                                            imageVector = if (isAddDriverExpanded) Icons.Default.ExpandLess else Icons.Default.ExpandMore,
+                                            contentDescription = null,
+                                            tint = Color.Gray
+                                        )
+                                    }
+
+                                    if (isAddDriverExpanded) {
+                                        Spacer(modifier = Modifier.height(12.dp))
+                                        Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                                            OutlinedTextField(
+                                                value = newDriverIdInput,
+                                                onValueChange = { newDriverIdInput = it },
+                                                label = { Text("Driver ID (e.g. 667)") },
+                                                singleLine = true,
+                                                colors = textFieldColors,
+                                                modifier = Modifier.weight(1f)
+                                            )
+                                            OutlinedTextField(
+                                                value = newDriverNameInput,
+                                                onValueChange = { newDriverNameInput = it },
+                                                label = { Text("Driver Name") },
+                                                singleLine = true,
+                                                colors = textFieldColors,
+                                                modifier = Modifier.weight(1f)
+                                            )
+                                        }
+                                        Spacer(modifier = Modifier.height(8.dp))
+                                        OutlinedTextField(
+                                            value = newDriverPlateInput,
+                                            onValueChange = { newDriverPlateInput = it },
+                                            label = { Text("Vehicle Plate (e.g. TX-667)") },
+                                            singleLine = true,
+                                            colors = textFieldColors,
+                                            modifier = Modifier.fillMaxWidth()
+                                        )
+                                        Spacer(modifier = Modifier.height(10.dp))
+                                        Button(
+                                            onClick = {
+                                                if (newDriverIdInput.isNotBlank()) {
+                                                    dispatchViewModel.addDriverToFleet(
+                                                        driverId = newDriverIdInput,
+                                                        name = newDriverNameInput,
+                                                        vehiclePlate = newDriverPlateInput
+                                                    )
+                                                    newDriverIdInput = ""
+                                                    newDriverNameInput = ""
+                                                    newDriverPlateInput = ""
+                                                    isAddDriverExpanded = false
+                                                }
+                                            },
+                                            colors = ButtonDefaults.buttonColors(containerColor = redBrand),
+                                            shape = RoundedCornerShape(12.dp),
+                                            modifier = Modifier.fillMaxWidth()
+                                        ) {
+                                            Text("ADD DRIVER TO FLEET LIST", fontWeight = FontWeight.Black)
+                                        }
+                                    }
+                                }
+                            }
+                        }
+
                         item {
                             // Broadcast box
                             Card(

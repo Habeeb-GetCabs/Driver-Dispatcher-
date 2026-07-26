@@ -100,6 +100,8 @@ class DispatchViewModel(application: Application) : AndroidViewModel(application
         )
     }
 
+    private val customFleetUnits = mutableListOf<DriverUnit>()
+
     private fun refreshFleetList(selfProfile: DriverProfile) {
         val defaultFleet = listOf(
             DriverUnit("DRV-101", "Alex Rivers", "TX-8821", "AVAILABLE", 92, "Main St & 5th Ave"),
@@ -116,8 +118,22 @@ class DispatchViewModel(application: Application) : AndroidViewModel(application
             lastLocation = selfProfile.lastLocationName
         )
 
-        // Combine self unit with fleet list without duplicate driver IDs
-        _fleetDrivers.value = listOf(selfUnit) + defaultFleet.filter { it.driverId != selfProfile.driverId }
+        val combined = listOf(selfUnit) + customFleetUnits + defaultFleet
+        _fleetDrivers.value = combined.distinctBy { it.driverId }
+    }
+
+    fun addDriverToFleet(driverId: String, name: String, vehiclePlate: String) {
+        val newUnit = DriverUnit(
+            driverId = if (driverId.startsWith("DRV-")) driverId else "DRV-$driverId",
+            driverName = name.ifBlank { "Driver $driverId" },
+            vehiclePlate = vehiclePlate.ifBlank { "TX-$driverId" },
+            status = "AVAILABLE",
+            batteryPercent = (80..100).random(),
+            lastLocation = "Downtown Depot"
+        )
+        customFleetUnits.removeAll { it.driverId == newUnit.driverId }
+        customFleetUnits.add(0, newUnit)
+        refreshFleetList(_driverProfile.value)
     }
 
     fun setRole(role: AppRole) {
