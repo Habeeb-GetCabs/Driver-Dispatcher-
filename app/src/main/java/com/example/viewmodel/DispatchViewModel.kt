@@ -6,12 +6,16 @@ import android.media.ToneGenerator
 import android.util.Log
 import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
+import com.example.audio.IlaiyaraajaRingtonePlayer
 import com.example.data.model.DispatchOrder
 import com.example.data.model.DispatchStatus
 import com.example.data.model.DriverProfile
 import com.example.data.model.DriverUnit
 import com.example.data.preferences.DriverProfileRepository
+import com.example.data.preferences.SettingsRepository
 import com.example.data.remote.FirebaseSyncManager
+import com.example.service.DispatchAlertAction
+import com.example.service.DispatchAlertController
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
@@ -97,6 +101,22 @@ class DispatchViewModel(application: Application) : AndroidViewModel(application
         )
         FirebaseSyncManager.syncAdminAccount(defaultMaster)
 
+        // Listen for action events from DispatchAlertService (Notification actions & 30s timeout)
+        viewModelScope.launch {
+            DispatchAlertController.actionFlow.collect { action ->
+                when (action) {
+                    is DispatchAlertAction.Accept -> acceptTrip(action.orderId)
+                    is DispatchAlertAction.Decline -> declineTrip(action.orderId)
+                    is DispatchAlertAction.Timeout -> {
+                        if (_activeAlertTrip.value?.orderId == action.orderId) {
+                            _activeAlertTrip.value = null
+                            _driverBroadcastMessage.value = "Trip #${action.orderId} alert timed out (30s)."
+                        }
+                    }
+                }
+            }
+        }
+
         // Live observe admin accounts from Firebase Realtime DB
         viewModelScope.launch {
             try {
@@ -156,6 +176,7 @@ class DispatchViewModel(application: Application) : AndroidViewModel(application
                             ) {
                                 // Dismiss alert modal on this device immediately!
                                 _activeAlertTrip.value = null
+                                stopTripAlert()
                                 _driverBroadcastMessage.value = "Trip #${currentAlert.orderId} was accepted by another driver."
                             }
                         }
@@ -168,8 +189,7 @@ class DispatchViewModel(application: Application) : AndroidViewModel(application
 
                         if (newDispatchedOrder != null) {
                             alertedOrderIds.add(newDispatchedOrder.orderId)
-                            _activeAlertTrip.value = newDispatchedOrder
-                            playDispatchAlertSound()
+                            triggerTripAlert(newDispatchedOrder)
                         }
                     }
                 }
@@ -299,13 +319,45 @@ class DispatchViewModel(application: Application) : AndroidViewModel(application
         }
     }
 
+    fun triggerTripAlert(order: DispatchOrder) {
+        _activeAlertTrip.value = order
+        viewModelScope.launch {
+            val selectedRingtone = try {
+                SettingsRepository(getApplication()).ilaiyaraajaRingtone.first()
+            } catch (e: Exception) {
+                "ACCORDION_GROOVE"
+            }
+            val currency = try {
+                SettingsRepository(getApplication()).currency.first()
+            } catch (e: Exception) {
+                "$"
+            }
+            DispatchAlertController.startAlert(
+                context = getApplication(),
+                orderId = order.orderId,
+                passengerName = order.passengerName,
+                pickupAddress = order.pickupAddress,
+                destinationAddress = order.destinationAddress,
+                estimatedFare = order.estimatedFare,
+                currencySymbol = currency,
+                ringtoneId = selectedRingtone
+            )
+        }
+    }
+
+    fun stopTripAlert() {
+        DispatchAlertController.stopAlert(getApplication())
+    }
+
     fun playDispatchAlertSound() {
         viewModelScope.launch {
             try {
-                repeat(3) {
-                    toneGenerator?.startTone(ToneGenerator.TONE_CDMA_HIGH_L, 400)
-                    delay(500)
+                val selectedRingtone = try {
+                    SettingsRepository(getApplication()).ilaiyaraajaRingtone.first()
+                } catch (e: Exception) {
+                    "ACCORDION_GROOVE"
                 }
+                IlaiyaraajaRingtonePlayer.playLoop(selectedRingtone)
             } catch (e: Exception) {
                 Log.e("DispatchViewModel", "Sound error: ${e.message}")
             }
@@ -340,11 +392,10 @@ class DispatchViewModel(application: Application) : AndroidViewModel(application
         )
 
         _dispatchOrders.value = listOf(newOrder) + _dispatchOrders.value
-        playDispatchAlertSound()
 
         val selfId = _driverProfile.value.driverId
         if (assignedDriverId == "ALL" || assignedDriverId == selfId) {
-            _activeAlertTrip.value = newOrder
+            triggerTripAlert(newOrder)
         }
 
         try {
@@ -369,8 +420,7 @@ class DispatchViewModel(application: Application) : AndroidViewModel(application
         )
 
         _dispatchOrders.value = listOf(sampleOrder) + _dispatchOrders.value
-        _activeAlertTrip.value = sampleOrder
-        playDispatchAlertSound()
+        triggerTripAlert(sampleOrder)
 
         try {
             FirebaseSyncManager.sendDispatchOrder(sampleOrder)
@@ -382,6 +432,7 @@ class DispatchViewModel(application: Application) : AndroidViewModel(application
     fun acceptTrip(orderId: String) {
         val myDriverId = _driverProfile.value.driverId
         _currentRole.value = AppRole.DRIVER
+        stopTripAlert()
 
         FirebaseSyncManager.acceptTripTransaction(orderId, myDriverId) { success, errorMsg ->
             if (success) {
@@ -439,6 +490,7 @@ class DispatchViewModel(application: Application) : AndroidViewModel(application
     }
 
     fun declineTrip(orderId: String) {
+        stopTripAlert()
         _dispatchOrders.value = _dispatchOrders.value.map {
             if (it.orderId == orderId) it.copy(status = DispatchStatus.DECLINED) else it
         }
@@ -465,6 +517,7 @@ class DispatchViewModel(application: Application) : AndroidViewModel(application
     }
 
     fun dismissAlert() {
+        stopTripAlert()
         _activeAlertTrip.value = null
     }
 
