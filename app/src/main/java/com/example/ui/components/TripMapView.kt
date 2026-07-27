@@ -249,9 +249,12 @@ private fun GpsVectorRouteCanvas(
         val width = size.width
         val height = size.height
 
-        val gridStep = 40.dp.toPx()
+        if (width <= 0f || width.isInfinite() || height <= 0f || height.isInfinite()) return@Canvas
+
+        val gridStep = kotlin.math.max(40.dp.toPx(), 10f)
         var x = 0f
-        while (x < width) {
+        var maxIterationsX = 2000
+        while (x < width && maxIterationsX > 0) {
             drawLine(
                 color = Color(0xFF1E293B),
                 start = Offset(x, 0f),
@@ -259,9 +262,11 @@ private fun GpsVectorRouteCanvas(
                 strokeWidth = 1f
             )
             x += gridStep
+            maxIterationsX--
         }
         var y = 0f
-        while (y < height) {
+        var maxIterationsY = 2000
+        while (y < height && maxIterationsY > 0) {
             drawLine(
                 color = Color(0xFF1E293B),
                 start = Offset(0f, y),
@@ -269,6 +274,7 @@ private fun GpsVectorRouteCanvas(
                 strokeWidth = 1f
             )
             y += gridStep
+            maxIterationsY--
         }
 
         if (route.isEmpty()) {

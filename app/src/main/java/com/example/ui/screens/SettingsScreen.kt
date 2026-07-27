@@ -810,6 +810,149 @@ fun SettingsScreen(
                 }
             }
 
+            // Admin Utilities Section
+
+            var showAdminPinDialog by remember { mutableStateOf(false) }
+
+            var adminPinInput by remember { mutableStateOf("") }
+
+            var resetStatus by remember { mutableStateOf("") }
+
+
+
+            Spacer(modifier = Modifier.height(16.dp))
+
+            Text(text = "ADMIN UTILITIES", color = Color(0xFFC62828), fontWeight = FontWeight.Black, fontSize = 14.sp, modifier = Modifier.padding(start = 8.dp))
+
+            
+
+            Card(
+
+                colors = CardDefaults.cardColors(containerColor = Color.White),
+
+                shape = RoundedCornerShape(24.dp),
+
+                modifier = Modifier.fillMaxWidth().border(1.dp, Color(0xFFF1F5F9), RoundedCornerShape(24.dp))
+
+            ) {
+
+                Column(
+
+                    modifier = Modifier.fillMaxWidth().padding(18.dp),
+
+                    verticalArrangement = Arrangement.spacedBy(10.dp)
+
+                ) {
+
+                    Text(text = "Danger Zone", color = Color(0xFFC62828), fontWeight = FontWeight.Bold, fontSize = 14.sp)
+
+                    Text(text = "Reset the fleet driver ID counter back to DRV-0011 and clear all driver mappings.", color = Color(0xFF64748B), fontSize = 12.sp)
+
+                    Button(
+
+                        onClick = { showAdminPinDialog = true },
+
+                        colors = ButtonDefaults.buttonColors(containerColor = Color(0xFFC62828)),
+
+                        shape = RoundedCornerShape(12.dp),
+
+                        modifier = Modifier.fillMaxWidth().height(48.dp)
+
+                    ) {
+
+                        Text(text = "RESET DRIVER ID COUNTER", fontWeight = FontWeight.Bold)
+
+                    }
+
+                    if (resetStatus.isNotBlank()) {
+
+                        Text(text = resetStatus, color = if (resetStatus.contains("Success")) Color(0xFF2E7D32) else Color(0xFFC62828), fontSize = 12.sp, fontWeight = FontWeight.Bold)
+
+                    }
+
+                }
+
+            }
+
+
+
+            if (showAdminPinDialog) {
+
+                AlertDialog(
+
+                    onDismissRequest = { showAdminPinDialog = false; adminPinInput = "" },
+
+                    title = { Text("Admin PIN Required") },
+
+                    text = {
+
+                        OutlinedTextField(
+
+                            value = adminPinInput,
+
+                            onValueChange = { adminPinInput = it },
+
+                            label = { Text("Enter PIN") },
+
+                            keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.NumberPassword),
+
+                            singleLine = true
+
+                        )
+
+                    },
+
+                    confirmButton = {
+
+                        Button(onClick = {
+
+                            if (adminPinInput == "2481") {
+
+                                resetStatus = "Resetting..."
+
+                                com.example.data.remote.FirebaseSyncManager.resetDriverIdCounter { success ->
+
+                                    resetStatus = if (success) "Successfully reset counter and cleared mappings!" else "Failed to reset counter."
+
+                                }
+
+                                showAdminPinDialog = false
+
+                                adminPinInput = ""
+
+                            } else {
+
+                                resetStatus = "Invalid PIN"
+
+                                showAdminPinDialog = false
+
+                                adminPinInput = ""
+
+                            }
+
+                        }) {
+
+                            Text("CONFIRM")
+
+                        }
+
+                    },
+
+                    dismissButton = {
+
+                        TextButton(onClick = { showAdminPinDialog = false; adminPinInput = "" }) {
+
+                            Text("CANCEL")
+
+                        }
+
+                    }
+
+                )
+
+            }
+
+
             Spacer(modifier = Modifier.height(80.dp)) // Avoid hiding behind FAB
         }
     }

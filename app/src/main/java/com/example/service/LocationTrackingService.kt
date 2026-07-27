@@ -641,13 +641,17 @@ class LocationTrackingService : Service() {
         }
 
         if (currentDriverId.isNotBlank()) {
-            val locName = resolveAddress(location.latitude, location.longitude)
-            com.example.data.remote.FirebaseSyncManager.updateDriverLocation(
-                currentDriverId,
-                location.latitude,
-                location.longitude,
-                locName
-            )
+            val lat = location.latitude
+            val lon = location.longitude
+            serviceScope.launch(kotlinx.coroutines.Dispatchers.IO) {
+                val locName = resolveAddress(lat, lon)
+                com.example.data.remote.FirebaseSyncManager.updateDriverLocation(
+                    currentDriverId,
+                    lat,
+                    lon,
+                    locName
+                )
+            }
         }
 
         if (currentState.status != TripStatus.RUNNING) {

@@ -1,3 +1,5 @@
+#!/bin/bash
+cat << 'INNER_EOF' > app/src/main/java/com/example/MainActivity.kt
 package com.example
 
 import android.os.Build
@@ -62,3 +64,4 @@ class MainActivity : ComponentActivity() {
         }
     }
 }
+INNER_EOF

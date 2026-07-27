@@ -19,7 +19,7 @@ import java.util.Locale
 
 object FirebaseSyncManager {
     private const val TAG = "FirebaseSyncManager"
-    private const val FIREBASE_URL = "https://drivetechsoft-default-rtdb.asia-southeast1.firebasedatabase.app"
+    const val FIREBASE_URL = "https://drivetechsoft-default-rtdb.asia-southeast1.firebasedatabase.app"
 
     private val database: FirebaseDatabase by lazy {
         try {
@@ -597,5 +597,18 @@ object FirebaseSyncManager {
                 }
             }
         })
+    }
+    fun resetDriverIdCounter(onComplete: (Boolean) -> Unit) {
+        val lastIdRef = database.getReference("metadata").child("lastDriverId")
+        lastIdRef.setValue(0L).addOnCompleteListener { task ->
+            if (task.isSuccessful) {
+                // Clear orphan mapping entries
+                database.getReference("drivers").removeValue().addOnCompleteListener { mappingTask ->
+                    onComplete(mappingTask.isSuccessful)
+                }
+            } else {
+                onComplete(false)
+            }
+        }
     }
 }

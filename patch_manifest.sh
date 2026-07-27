@@ -1,3 +1,5 @@
+#!/bin/bash
+cat << 'INNER_EOF' > app/src/main/AndroidManifest.xml
 <?xml version="1.0" encoding="utf-8"?>
 <manifest xmlns:android="http://schemas.android.com/apk/res/android"
     xmlns:tools="http://schemas.android.com/tools">
@@ -67,3 +69,4 @@
 
     </application>
 </manifest>
+INNER_EOF
