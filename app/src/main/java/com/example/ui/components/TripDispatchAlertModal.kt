@@ -11,8 +11,6 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.*
 import androidx.compose.material3.*
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.DisposableEffect
-import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -25,7 +23,6 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.compose.ui.window.Dialog
 import androidx.compose.ui.window.DialogProperties
-import com.example.audio.IlaiyaraajaRingtonePlayer
 import com.example.data.model.DispatchOrder
 
 @Composable
@@ -37,19 +34,7 @@ fun TripDispatchAlertModal(
     onDecline: (DispatchOrder) -> Unit
 ) {
     val context = LocalContext.current
-    val trackInfo = IlaiyaraajaRingtonePlayer.AVAILABLE_TRACKS.find { it.id == selectedRingtoneId }
-        ?: IlaiyaraajaRingtonePlayer.AVAILABLE_TRACKS.first()
 
-    // Continuous Ilaiyaraaja Audio Ringtone Looping until Accept/Decline/Dismiss
-    LaunchedEffect(order.orderId, selectedRingtoneId) {
-        IlaiyaraajaRingtonePlayer.playLoop(context, selectedRingtoneId)
-    }
-
-    DisposableEffect(order.orderId) {
-        onDispose {
-            IlaiyaraajaRingtonePlayer.stop()
-        }
-    }
     Dialog(
         onDismissRequest = { /* Force explicit Accept/Decline action */ },
         properties = DialogProperties(
@@ -116,9 +101,9 @@ fun TripDispatchAlertModal(
 
                     Spacer(modifier = Modifier.height(8.dp))
 
-                    // Ilaiyaraaja Playing Ringtone Badge
+                    // Alert Badge
                     Surface(
-                        color = Color.Yellow,
+                        color = Color.White.copy(alpha = 0.2f),
                         shape = RoundedCornerShape(20.dp),
                         modifier = Modifier.padding(horizontal = 8.dp)
                     ) {
@@ -127,17 +112,17 @@ fun TripDispatchAlertModal(
                             modifier = Modifier.padding(horizontal = 12.dp, vertical = 6.dp)
                         ) {
                             Icon(
-                                imageVector = Icons.Default.MusicNote,
-                                contentDescription = "Playing Music",
-                                tint = Color.Black,
+                                imageVector = Icons.Default.Notifications,
+                                contentDescription = "Alert Active",
+                                tint = Color.White,
                                 modifier = Modifier.size(16.dp)
                             )
                             Spacer(modifier = Modifier.width(6.dp))
                             Text(
-                                text = "${trackInfo.emoji} ${trackInfo.title}",
+                                text = "SYSTEM SOUNDS ENABLED",
                                 fontSize = 11.sp,
-                                fontWeight = FontWeight.Black,
-                                color = Color.Black
+                                fontWeight = FontWeight.Bold,
+                                color = Color.White
                             )
                         }
                     }

@@ -6,7 +6,6 @@ import android.media.ToneGenerator
 import android.util.Log
 import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
-import com.example.audio.IlaiyaraajaRingtonePlayer
 import com.example.data.model.DispatchOrder
 import com.example.data.model.DispatchStatus
 import com.example.data.model.DriverProfile
@@ -350,17 +349,10 @@ class DispatchViewModel(application: Application) : AndroidViewModel(application
     }
 
     fun playDispatchAlertSound() {
-        viewModelScope.launch {
-            try {
-                val selectedRingtone = try {
-                    SettingsRepository(getApplication()).ilaiyaraajaRingtone.first()
-                } catch (e: Exception) {
-                    "ACCORDION_GROOVE"
-                }
-                IlaiyaraajaRingtonePlayer.playLoop(getApplication(), selectedRingtone)
-            } catch (e: Exception) {
-                Log.e("DispatchViewModel", "Sound error: ${e.message}")
-            }
+        try {
+            toneGenerator?.startTone(ToneGenerator.TONE_CDMA_PIP, 150)
+        } catch (e: Exception) {
+            Log.e("DispatchViewModel", "Sound error: ${e.message}")
         }
     }
 

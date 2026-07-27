@@ -11,7 +11,6 @@ import android.os.VibratorManager
 import android.util.Log
 import androidx.core.app.NotificationCompat
 import com.example.MainActivity
-import com.example.audio.IlaiyaraajaRingtonePlayer
 import kotlinx.coroutines.*
 import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.asSharedFlow
@@ -84,6 +83,7 @@ class DispatchAlertService : Service() {
 
     private var vibrator: Vibrator? = null
     private var currentOrderId: String? = null
+    private var currentRingtone: android.media.Ringtone? = null
 
     override fun onCreate() {
         super.onCreate()
@@ -154,8 +154,19 @@ class DispatchAlertService : Service() {
         currencySymbol: String,
         ringtoneId: String
     ) {
-        // Start continuous looping audio ringtone
-        IlaiyaraajaRingtonePlayer.playLoop(this, ringtoneId)
+        // Start continuous looping standard system ringtone/vibration pattern
+        try {
+            val ringtoneUri = android.media.RingtoneManager.getDefaultUri(android.media.RingtoneManager.TYPE_RINGTONE)
+                ?: android.media.RingtoneManager.getDefaultUri(android.media.RingtoneManager.TYPE_NOTIFICATION)
+            currentRingtone = android.media.RingtoneManager.getRingtone(this, ringtoneUri)?.apply {
+                if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.P) {
+                    isLooping = true
+                }
+                play()
+            }
+        } catch (e: Exception) {
+            Log.e(TAG, "Failed to play standard system ringtone: ${e.message}")
+        }
 
         // Start continuous looping vibration pattern
         startContinuousVibration()
@@ -249,7 +260,8 @@ class DispatchAlertService : Service() {
 
     private fun stopAudioAndVibration() {
         try {
-            IlaiyaraajaRingtonePlayer.stop()
+            currentRingtone?.stop()
+            currentRingtone = null
             vibrator?.cancel()
         } catch (e: Exception) {
             Log.e(TAG, "Error stopping audio or vibration: ${e.message}")

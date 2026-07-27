@@ -43,15 +43,25 @@ class DriverProfileRepository(private val context: Context) {
     suspend fun ensureDriverIdAssigned(): DriverProfile {
         val prefs = context.driverDataStore.data.first()
         val existingId = prefs[KEY_DRIVER_ID]
-        if (existingId.isNullOrBlank()) {
-            val newId = com.example.data.remote.FirebaseSyncManager.getOrGenerateSequentialDriverId()
+        val phoneNumber = prefs[KEY_PHONE_NUMBER] ?: ""
+        if (existingId.isNullOrBlank() || existingId == "DRV-0011") {
+            val firebaseId = if (phoneNumber.isNotBlank() && phoneNumber != "+1 555-0100") {
+                com.example.data.remote.FirebaseSyncManager.findExistingDriverIdByPhoneOrUid(phoneNumber)
+            } else {
+                null
+            }
+            val finalId = if (!firebaseId.isNullOrBlank()) {
+                firebaseId
+            } else {
+                com.example.data.remote.FirebaseSyncManager.getOrGenerateSequentialDriverId()
+            }
             val defaultName = if (prefs[KEY_DRIVER_NAME].isNullOrBlank() || prefs[KEY_DRIVER_NAME]?.startsWith("Driver ") == true) {
-                "Driver ${newId.takeLast(4)}"
+                "Driver ${finalId.takeLast(4)}"
             } else {
                 prefs[KEY_DRIVER_NAME]!!
             }
             context.driverDataStore.edit { p ->
-                p[KEY_DRIVER_ID] = newId
+                p[KEY_DRIVER_ID] = finalId
                 p[KEY_DRIVER_NAME] = defaultName
             }
         }
@@ -63,18 +73,41 @@ class DriverProfileRepository(private val context: Context) {
     }
 
     suspend fun saveProfile(profile: DriverProfile) {
+        var resolvedId = profile.driverId
+        if (resolvedId.isBlank() || resolvedId == "DRV-0011") {
+            val firebaseId = if (profile.phoneNumber.isNotBlank() && profile.phoneNumber != "+1 555-0100") {
+                com.example.data.remote.FirebaseSyncManager.findExistingDriverIdByPhoneOrUid(profile.phoneNumber)
+            } else {
+                null
+            }
+            resolvedId = if (!firebaseId.isNullOrBlank()) {
+                firebaseId
+            } else {
+                com.example.data.remote.FirebaseSyncManager.getOrGenerateSequentialDriverId()
+            }
+        } else {
+            if (profile.phoneNumber.isNotBlank() && profile.phoneNumber != "+1 555-0100") {
+                val existingFirebaseId = com.example.data.remote.FirebaseSyncManager.findExistingDriverIdByPhoneOrUid(profile.phoneNumber)
+                if (!existingFirebaseId.isNullOrBlank() && existingFirebaseId != resolvedId) {
+                    resolvedId = existingFirebaseId
+                }
+            }
+        }
+
+        val updatedProfile = profile.copy(driverId = resolvedId)
+
         context.driverDataStore.edit { prefs ->
-            prefs[KEY_DRIVER_ID] = profile.driverId
-            prefs[KEY_DRIVER_NAME] = profile.driverName
-            prefs[KEY_PHONE_NUMBER] = profile.phoneNumber
-            prefs[KEY_VEHICLE_PLATE] = profile.vehiclePlate
-            prefs[KEY_VEHICLE_MODEL] = profile.vehicleModel
-            prefs[KEY_PHOTO_URI] = profile.photoUri
-            prefs[KEY_IS_ONLINE] = profile.isOnline
-            prefs[KEY_FLEET_CODE] = profile.fleetNetworkCode
+            prefs[KEY_DRIVER_ID] = updatedProfile.driverId
+            prefs[KEY_DRIVER_NAME] = updatedProfile.driverName
+            prefs[KEY_PHONE_NUMBER] = updatedProfile.phoneNumber
+            prefs[KEY_VEHICLE_PLATE] = updatedProfile.vehiclePlate
+            prefs[KEY_VEHICLE_MODEL] = updatedProfile.vehicleModel
+            prefs[KEY_PHOTO_URI] = updatedProfile.photoUri
+            prefs[KEY_IS_ONLINE] = updatedProfile.isOnline
+            prefs[KEY_FLEET_CODE] = updatedProfile.fleetNetworkCode
         }
         try {
-            com.example.data.remote.FirebaseSyncManager.syncDriverProfile(profile)
+            com.example.data.remote.FirebaseSyncManager.syncDriverProfile(updatedProfile)
         } catch (e: Exception) {
             android.util.Log.e("DriverProfileRepository", "Failed to sync profile to Firebase", e)
         }

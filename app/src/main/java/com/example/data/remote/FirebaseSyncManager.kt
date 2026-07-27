@@ -194,6 +194,7 @@ object FirebaseSyncManager {
             "fleetNetworkCode" to profile.fleetNetworkCode,
             "photoUrl" to profile.photoUri,
             "photoUri" to profile.photoUri,
+            "profilePicUrl" to profile.photoUri,
             "lastUpdatedTimestamp" to System.currentTimeMillis()
         )
         
@@ -272,7 +273,8 @@ object FirebaseSyncManager {
                         val battery = child.child("batteryPercent").getValue(Long::class.java)?.toInt()
                             ?: child.child("batteryPercent").getValue(Int::class.java) ?: 95
 
-                        val photoUrl = child.child("photoUrl").getValue(String::class.java)
+                        val photoUrl = child.child("profilePicUrl").getValue(String::class.java)
+                            ?: child.child("photoUrl").getValue(String::class.java)
                             ?: child.child("photoUri").getValue(String::class.java) ?: ""
                         val phone = child.child("phoneNumber").getValue(String::class.java) ?: ""
 
@@ -463,6 +465,101 @@ object FirebaseSyncManager {
 
         ordersRef.addValueEventListener(listener)
         awaitClose { ordersRef.removeEventListener(listener) }
+    }
+
+    /**
+     * Find an existing driver ID by checking:
+     * 1. /drivers/{uid}/driverId
+     * 2. /drivers/{phoneNumber}/driverId
+     * 3. Scanning children under /drivers for matching phoneNumber
+     */
+    suspend fun findExistingDriverIdByPhoneOrUid(phone: String, uid: String? = null): String? = kotlinx.coroutines.suspendCancellableCoroutine { continuation ->
+        if (phone.isBlank() && uid.isNullOrBlank()) {
+            continuation.resume(null)
+            return@suspendCancellableCoroutine
+        }
+
+        val database = FirebaseDatabase.getInstance(FIREBASE_URL)
+
+        // Local helper to normalize phone numbers
+        fun normalize(p: String): String {
+            return p.replace(Regex("[^0-9]"), "")
+        }
+
+        // Local helper to search all drivers
+        fun queryAllDriversByPhone() {
+            if (phone.isBlank()) {
+                continuation.resume(null)
+                return
+            }
+            val driversRef = database.getReference("drivers")
+            driversRef.addListenerForSingleValueEvent(object : ValueEventListener {
+                override fun onDataChange(snapshot: DataSnapshot) {
+                    var foundId: String? = null
+                    for (child in snapshot.children) {
+                        val driverPhone = child.child("phoneNumber").getValue(String::class.java)
+                        if (driverPhone != null && normalize(driverPhone) == normalize(phone)) {
+                            val driverId = child.child("driverId").getValue(String::class.java)
+                            if (!driverId.isNullOrBlank()) {
+                                foundId = driverId
+                                break
+                            }
+                        }
+                    }
+                    continuation.resume(foundId)
+                }
+
+                override fun onCancelled(error: DatabaseError) {
+                    continuation.resume(null)
+                }
+            })
+        }
+
+        // Local helper to search by phoneNumber child key
+        fun checkByPhoneNumber() {
+            if (phone.isBlank()) {
+                queryAllDriversByPhone()
+                return
+            }
+            val cleanPhoneKey = phone.replace(Regex("[^a-zA-Z0-9]"), "")
+            if (cleanPhoneKey.isNotBlank()) {
+                database.getReference("drivers").child(cleanPhoneKey).addListenerForSingleValueEvent(object : ValueEventListener {
+                    override fun onDataChange(snapshot: DataSnapshot) {
+                        val existingId = snapshot.child("driverId").getValue(String::class.java)
+                        if (!existingId.isNullOrBlank()) {
+                            continuation.resume(existingId)
+                        } else {
+                            queryAllDriversByPhone()
+                        }
+                    }
+                    override fun onCancelled(error: DatabaseError) {
+                        queryAllDriversByPhone()
+                    }
+                })
+            } else {
+                queryAllDriversByPhone()
+            }
+        }
+
+        // Step 1: Check by UID child key if provided
+        if (!uid.isNullOrBlank()) {
+            val uidRef = database.getReference("drivers").child(uid)
+            uidRef.addListenerForSingleValueEvent(object : ValueEventListener {
+                override fun onDataChange(snapshot: DataSnapshot) {
+                    val existingId = snapshot.child("driverId").getValue(String::class.java)
+                    if (!existingId.isNullOrBlank()) {
+                        continuation.resume(existingId)
+                    } else {
+                        checkByPhoneNumber()
+                    }
+                }
+                override fun onCancelled(error: DatabaseError) {
+                    checkByPhoneNumber()
+                }
+            })
+        } else {
+            checkByPhoneNumber()
+        }
     }
 
     /**
