@@ -910,7 +910,7 @@ fun SettingsScreen(
                                         selectedRingtone = track.id
                                         isRingtoneDropdownExpanded = false
                                         if (isPreviewPlaying) {
-                                            IlaiyaraajaRingtonePlayer.playLoop(track.id)
+                                            IlaiyaraajaRingtonePlayer.playLoop(context, track.id)
                                         }
                                     },
                                     modifier = Modifier.testTag("ringtone_option_${track.id}")
@@ -931,7 +931,7 @@ fun SettingsScreen(
                                     IlaiyaraajaRingtonePlayer.stop()
                                     isPreviewPlaying = false
                                 } else {
-                                    IlaiyaraajaRingtonePlayer.playLoop(selectedRingtone)
+                                    IlaiyaraajaRingtonePlayer.playLoop(context, selectedRingtone)
                                     isPreviewPlaying = true
                                 }
                             },

@@ -357,7 +357,7 @@ class DispatchViewModel(application: Application) : AndroidViewModel(application
                 } catch (e: Exception) {
                     "ACCORDION_GROOVE"
                 }
-                IlaiyaraajaRingtonePlayer.playLoop(selectedRingtone)
+                IlaiyaraajaRingtonePlayer.playLoop(getApplication(), selectedRingtone)
             } catch (e: Exception) {
                 Log.e("DispatchViewModel", "Sound error: ${e.message}")
             }

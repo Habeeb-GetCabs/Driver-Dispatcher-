@@ -17,6 +17,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
@@ -35,12 +36,13 @@ fun TripDispatchAlertModal(
     onAccept: (DispatchOrder) -> Unit,
     onDecline: (DispatchOrder) -> Unit
 ) {
+    val context = LocalContext.current
     val trackInfo = IlaiyaraajaRingtonePlayer.AVAILABLE_TRACKS.find { it.id == selectedRingtoneId }
         ?: IlaiyaraajaRingtonePlayer.AVAILABLE_TRACKS.first()
 
     // Continuous Ilaiyaraaja Audio Ringtone Looping until Accept/Decline/Dismiss
     LaunchedEffect(order.orderId, selectedRingtoneId) {
-        IlaiyaraajaRingtonePlayer.playLoop(selectedRingtoneId)
+        IlaiyaraajaRingtonePlayer.playLoop(context, selectedRingtoneId)
     }
 
     DisposableEffect(order.orderId) {
