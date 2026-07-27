@@ -155,7 +155,7 @@ class DispatchAlertService : Service() {
         ringtoneId: String
     ) {
         // Start continuous looping audio ringtone
-        IlaiyaraajaRingtonePlayer.playLoop(ringtoneId)
+        IlaiyaraajaRingtonePlayer.playLoop(this, ringtoneId)
 
         // Start continuous looping vibration pattern
         startContinuousVibration()

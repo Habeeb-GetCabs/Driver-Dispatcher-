@@ -1,12 +1,16 @@
 package com.example.audio
 
+import android.content.Context
 import android.media.AudioAttributes
 import android.media.AudioFormat
 import android.media.AudioManager
 import android.media.AudioTrack
+import android.media.MediaPlayer
+import android.net.Uri
 import android.os.Build
 import android.util.Log
 import kotlinx.coroutines.*
+import java.io.File
 import kotlin.math.sin
 import kotlin.math.PI
 import kotlin.random.Random
@@ -78,12 +82,28 @@ object IlaiyaraajaRingtonePlayer {
 
     private var playingJob: Job? = null
     private var currentAudioTrack: AudioTrack? = null
+    private var mediaPlayer: MediaPlayer? = null
     private val scope = CoroutineScope(Dispatchers.Default + SupervisorJob())
 
     @Synchronized
     fun playLoop(trackId: String) {
+        playLoop(null, trackId)
+    }
+
+    @Synchronized
+    fun playLoop(context: Context?, trackId: String = "ACCORDION_GROOVE") {
         stop() // Stop any ongoing playback
 
+        // 1. Check if user has uploaded a custom raw MP3 file or asset in app resources
+        if (context != null) {
+            val playedMp3 = tryPlayCustomMp3Resource(context)
+            if (playedMp3) {
+                Log.d(TAG, "Successfully started looping custom MP3 audio resource!")
+                return
+            }
+        }
+
+        // 2. Synthesize audio loop if no custom MP3 resource was found
         playingJob = scope.launch {
             try {
                 val track = AVAILABLE_TRACKS.find { it.id == trackId } ?: AVAILABLE_TRACKS.first()
@@ -128,7 +148,7 @@ object IlaiyaraajaRingtonePlayer {
                 currentAudioTrack = audioTrack
                 audioTrack.play()
 
-                Log.d(TAG, "Started looping Ilaiyaraaja track: ${track.title}")
+                Log.d(TAG, "Started looping Ilaiyaraaja synthesized track: ${track.title}")
 
                 // Loop continuously until cancelled
                 while (isActive) {
@@ -151,11 +171,53 @@ object IlaiyaraajaRingtonePlayer {
         }
     }
 
+    private fun tryPlayCustomMp3Resource(context: Context): Boolean {
+        return try {
+            val rawResNames = listOf(
+                "ilaiyaraaja_bgm",
+                "dispatch_alert",
+                "custom_ringtone",
+                "bgm",
+                "ringtone"
+            )
+            var rawResId = 0
+            for (resName in rawResNames) {
+                val id = context.resources.getIdentifier(resName, "raw", context.packageName)
+                if (id != 0) {
+                    rawResId = id
+                    break
+                }
+            }
+
+            if (rawResId != 0) {
+                val player = MediaPlayer.create(context, rawResId)
+                if (player != null) {
+                    player.isLooping = true
+                    player.setAudioAttributes(
+                        AudioAttributes.Builder()
+                            .setUsage(AudioAttributes.USAGE_MEDIA)
+                            .setContentType(AudioAttributes.CONTENT_TYPE_MUSIC)
+                            .build()
+                    )
+                    player.start()
+                    mediaPlayer = player
+                    Log.d(TAG, "Playing custom raw resource MP3 (resId: $rawResId)")
+                    return true
+                }
+            }
+            false
+        } catch (e: Exception) {
+            Log.e(TAG, "Failed to play custom MP3 resource: ${e.message}")
+            false
+        }
+    }
+
     @Synchronized
     fun stop() {
         playingJob?.cancel()
         playingJob = null
         cleanupAudioTrack()
+        cleanupMediaPlayer()
     }
 
     private fun cleanupAudioTrack() {
@@ -170,6 +232,21 @@ object IlaiyaraajaRingtonePlayer {
             Log.e(TAG, "Error cleaning up AudioTrack: ${e.message}")
         } finally {
             currentAudioTrack = null
+        }
+    }
+
+    private fun cleanupMediaPlayer() {
+        try {
+            mediaPlayer?.let {
+                if (it.isPlaying) {
+                    it.stop()
+                }
+                it.release()
+            }
+        } catch (e: Exception) {
+            Log.e(TAG, "Error cleaning up MediaPlayer: ${e.message}")
+        } finally {
+            mediaPlayer = null
         }
     }
 
