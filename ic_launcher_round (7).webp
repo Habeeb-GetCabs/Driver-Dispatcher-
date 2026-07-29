@@ -1,0 +1,30 @@
+{
+  "project_info": {
+    "project_number": "703884125645",
+    "firebase_url": "https://drivetechsoft-default-rtdb.asia-southeast1.firebasedatabase.app",
+    "project_id": "drivetechsoft",
+    "storage_bucket": "drivetechsoft.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:703884125645:android:e96611fbec807396d3d084",
+        "android_client_info": {
+          "package_name": "com.aistudio.taximeter.pro.ccebfd"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyA6ZYc6w1GqEdO7Pz3ikuhoZprnd6Gcaa8"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}
