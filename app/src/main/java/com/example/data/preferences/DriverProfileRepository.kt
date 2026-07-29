@@ -119,6 +119,14 @@ class DriverProfileRepository(private val context: Context) {
         }
     }
 
+    suspend fun clearProfile() {
+        context.driverDataStore.edit { prefs ->
+            prefs.remove(KEY_DRIVER_ID)
+            prefs.remove(KEY_DRIVER_NAME)
+            prefs.remove(KEY_PHONE_NUMBER)
+            prefs.remove(KEY_VEHICLE_PLATE)
+        }
+    }
     suspend fun getOrInitProfile(): DriverProfile {
         val current = driverProfileFlow.first()
         // Save initial values if needed

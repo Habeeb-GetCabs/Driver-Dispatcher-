@@ -170,6 +170,10 @@ fun DispatcherScreen(
     var newDriverNameInput by remember { mutableStateOf("") }
     var newDriverPlateInput by remember { mutableStateOf("") }
     var isAddDriverExpanded by remember { mutableStateOf(false) }
+    var showPurgeDialog by remember { mutableStateOf(false) }
+    var purgePinInput by remember { mutableStateOf("") }
+    var showPurgeConfirm by remember { mutableStateOf(false) }
+    var purgeStatusMessage by remember { mutableStateOf("") }
 
     var subAdminNameInput by remember { mutableStateOf("") }
     var subAdminPinInput by remember { mutableStateOf("") }
@@ -940,6 +944,15 @@ fun DispatcherScreen(
                                         ) {
                                             Text("ADD DRIVER TO FLEET LIST", fontWeight = FontWeight.Black)
                                         }
+                                        Spacer(modifier = Modifier.height(24.dp))
+                                        Button(
+                                            onClick = { showPurgeDialog = true },
+                                            colors = ButtonDefaults.buttonColors(containerColor = Color.Black),
+                                            shape = RoundedCornerShape(12.dp),
+                                            modifier = Modifier.fillMaxWidth()
+                                        ) {
+                                            Text("PURGE ALL DRIVERS & RESET IDs", fontWeight = FontWeight.Black, color = Color.Red)
+                                        }
                                     }
                                 }
                             }
@@ -1567,6 +1580,71 @@ fun DispatcherScreen(
                 }
 
                 // CONFIRM DELETE DRIVER DIALOG
+                if (showPurgeDialog) {
+                    AlertDialog(
+                        onDismissRequest = { showPurgeDialog = false; purgePinInput = "" },
+                        title = { Text("Admin Authorization") },
+                        text = {
+                            Column {
+                                Text("Enter Admin PIN to purge fleet:")
+                                Spacer(modifier = Modifier.height(8.dp))
+                                OutlinedTextField(
+                                    value = purgePinInput,
+                                    onValueChange = { purgePinInput = it },
+                                    label = { Text("PIN") },
+                                    keyboardOptions = androidx.compose.foundation.text.KeyboardOptions(keyboardType = androidx.compose.ui.text.input.KeyboardType.NumberPassword),
+                                    singleLine = true
+                                )
+                                if (purgeStatusMessage.isNotEmpty()) {
+                                    Text(purgeStatusMessage, color = Color.Red, fontSize = 12.sp, modifier = Modifier.padding(top = 4.dp))
+                                }
+                            }
+                        },
+                        confirmButton = {
+                            Button(onClick = {
+                                if (purgePinInput == "2481") {
+                                    showPurgeDialog = false
+                                    purgePinInput = ""
+                                    showPurgeConfirm = true
+                                } else {
+                                    purgeStatusMessage = "Invalid PIN"
+                                }
+                            }) {
+                                Text("NEXT")
+                            }
+                        },
+                        dismissButton = {
+                            TextButton(onClick = { showPurgeDialog = false; purgePinInput = ""; purgeStatusMessage = "" }) {
+                                Text("CANCEL")
+                            }
+                        }
+                    )
+                }
+                if (showPurgeConfirm) {
+                    AlertDialog(
+                        onDismissRequest = { showPurgeConfirm = false },
+                        title = { Text("⚠️ WARNING: DATA PURGE", color = Color.Red, fontWeight = FontWeight.Bold) },
+                        text = {
+                            Text("This will permanently delete all driver profiles from Firebase and reset driver IDs to DRV-0001. Proceed?")
+                        },
+                        confirmButton = {
+                            Button(onClick = {
+                                com.example.data.remote.FirebaseSyncManager.purgeAllDrivers { success ->
+                                    if (success) {
+                                        showPurgeConfirm = false
+                                    }
+                                }
+                            }, colors = ButtonDefaults.buttonColors(containerColor = Color.Red)) {
+                                Text("PURGE DATA", color = Color.White)
+                            }
+                        },
+                        dismissButton = {
+                            TextButton(onClick = { showPurgeConfirm = false }) {
+                                Text("CANCEL")
+                            }
+                        }
+                    )
+                }
                 if (showDeleteConfirmDialog) {
                     AlertDialog(
                         onDismissRequest = { showDeleteConfirmDialog = false },

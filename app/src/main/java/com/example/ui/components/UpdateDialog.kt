@@ -68,7 +68,7 @@ fun UpdateDialog(updateInfo: UpdateInfo) {
                 Spacer(modifier = Modifier.height(8.dp))
                 
                 Text(
-                    text = "A new version of Get Cabs Driver is available. Please update to continue.",
+                    text = "An update is required to continue using Get Cabs.",
                     fontSize = 14.sp,
                     color = Color.DarkGray,
                     textAlign = TextAlign.Center

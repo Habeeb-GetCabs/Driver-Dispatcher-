@@ -572,7 +572,7 @@ object FirebaseSyncManager {
         lastIdRef.runTransaction(object : Transaction.Handler {
             override fun doTransaction(mutableData: MutableData): Transaction.Result {
                 val currentVal = mutableData.getValue(Long::class.java)
-                val nextVal = if (currentVal == null || currentVal < 10L) 11L else currentVal + 1L
+                val nextVal = if (currentVal == null) 1L else currentVal + 1L
                 mutableData.value = nextVal
                 return Transaction.success(mutableData)
             }
@@ -610,5 +610,34 @@ object FirebaseSyncManager {
                 onComplete(false)
             }
         }
+    }
+    fun purgeAllDrivers(onComplete: (Boolean) -> Unit) {
+        val lastIdRef = database.getReference("metadata").child("lastDriverId")
+        lastIdRef.setValue(0L).addOnCompleteListener { task ->
+            if (task.isSuccessful) {
+                database.getReference("drivers").removeValue().addOnCompleteListener { mappingTask ->
+                    onComplete(mappingTask.isSuccessful)
+                }
+            } else {
+                onComplete(false)
+            }
+        }
+    }
+    fun observeDriverExists(driverId: String): Flow<Boolean> = callbackFlow {
+        if (driverId.isBlank()) {
+            trySend(false)
+            return@callbackFlow
+        }
+        val listener = object : ValueEventListener {
+            override fun onDataChange(snapshot: DataSnapshot) {
+                trySend(snapshot.exists())
+            }
+            override fun onCancelled(error: DatabaseError) {
+                trySend(true) // assume exists on error to prevent unwanted purge
+            }
+        }
+        val ref = database.getReference("drivers").child(driverId)
+        ref.addValueEventListener(listener)
+        awaitClose { ref.removeEventListener(listener) }
     }
 }

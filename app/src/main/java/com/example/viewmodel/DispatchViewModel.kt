@@ -88,6 +88,19 @@ class DispatchViewModel(application: Application) : AndroidViewModel(application
                 _driverProfile.value = profile
                 FirebaseSyncManager.syncDriverProfile(profile)
                 refreshFleetList(profile)
+                
+                if (profile.driverId.isNotBlank() && profile.driverId != "DRV-0011") {
+                    kotlinx.coroutines.GlobalScope.launch {
+                        FirebaseSyncManager.observeDriverExists(profile.driverId).collect { exists ->
+                            if (!exists) {
+                                Log.w("DispatchViewModel", "Driver profile purged. Clearing local session.")
+                                profileRepository.clearProfile()
+                                // Terminate app to force restart and claim new ID
+                                kotlin.system.exitProcess(0)
+                            }
+                        }
+                    }
+                }
             }
         }
 
