@@ -1,8 +1,13 @@
 package com.example.ui.screens
 
-import androidx.compose.foundation.BorderStroke
+import android.content.Context
+import android.content.Intent
+import android.net.Uri
+import androidx.compose.foundation.Canvas
+import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
+import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
@@ -11,92 +16,67 @@ import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
-import androidx.compose.material.icons.filled.ArrowDropDown
-import androidx.compose.material.icons.filled.Explore
-import androidx.compose.material.icons.filled.Info
-import androidx.compose.material.icons.filled.MusicNote
-import androidx.compose.material.icons.filled.Notifications
-import androidx.compose.material.icons.filled.PlayArrow
-import androidx.compose.material.icons.filled.Save
-import androidx.compose.material.icons.filled.Stop
-import androidx.compose.material.icons.filled.VolumeUp
+import androidx.compose.material.icons.filled.NoteAdd
+import androidx.compose.material.icons.filled.Phone
+import androidx.compose.material.icons.filled.Share
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
+import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.PathEffect
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.testTag
+import androidx.compose.ui.res.painterResource
+import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.KeyboardType
+import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
-import com.example.service.LocationTrackingService
-import com.example.viewmodel.SettingsViewModel
+import com.example.R
+import com.example.data.database.TripEntity
+import com.example.viewmodel.MeterViewModel
+import kotlinx.coroutines.launch
+import java.text.SimpleDateFormat
+import java.util.*
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-fun SettingsScreen(
-    viewModel: SettingsViewModel,
+fun TripReceiptScreen(
+    viewModel: MeterViewModel,
+    tripId: Int,
+    currencySymbol: String,
     onNavigateBack: () -> Unit
 ) {
-    val tripState by LocationTrackingService.tripState.collectAsStateWithLifecycle()
-    val baseFareState by viewModel.baseFare.collectAsStateWithLifecycle()
-    val farePerKmState by viewModel.farePerKm.collectAsStateWithLifecycle()
-    val waitFarePerMinState by viewModel.waitFarePerMin.collectAsStateWithLifecycle()
-    val speedThresholdState by viewModel.speedThreshold.collectAsStateWithLifecycle()
-    val audioEnabledState by viewModel.audioEnabled.collectAsStateWithLifecycle()
-    val autoStartEnabledState by viewModel.autoStartEnabled.collectAsStateWithLifecycle()
-    val currencyState by viewModel.currency.collectAsStateWithLifecycle()
-    val outOfCitySurchargePercentState by viewModel.outOfCitySurchargePercent.collectAsStateWithLifecycle()
-    val ilaiyaraajaRingtoneState by viewModel.ilaiyaraajaRingtone.collectAsStateWithLifecycle()
-
-    var baseFareInput by remember { mutableStateOf("") }
-    var farePerKmInput by remember { mutableStateOf("") }
-    var waitFarePerMinInput by remember { mutableStateOf("") }
-    var speedThresholdInput by remember { mutableStateOf("") }
-    var currencyInput by remember { mutableStateOf("") }
-    var outOfCitySurchargePercentInput by remember { mutableStateOf("") }
-    var audioEnabled by remember { mutableStateOf(true) }
-    var autoStartEnabled by remember { mutableStateOf(true) }
-    var selectedRingtone by remember { mutableStateOf("ACCORDION_GROOVE") }
-    var isPreviewPlaying by remember { mutableStateOf(false) }
-    var isRingtoneDropdownExpanded by remember { mutableStateOf(false) }
-
     val context = LocalContext.current
-
-    // Synchronize inputs once preferences load
-    LaunchedEffect(baseFareState, farePerKmState, waitFarePerMinState, speedThresholdState, currencyState, outOfCitySurchargePercentState, audioEnabledState, autoStartEnabledState, ilaiyaraajaRingtoneState) {
-        baseFareInput = baseFareState.toString()
-        farePerKmInput = farePerKmState.toString()
-        waitFarePerMinInput = waitFarePerMinState.toString()
-        speedThresholdInput = speedThresholdState.toString()
-        currencyInput = currencyState
-        outOfCitySurchargePercentInput = outOfCitySurchargePercentState.toString()
-        audioEnabled = audioEnabledState
-        autoStartEnabled = autoStartEnabledState
-        selectedRingtone = ilaiyaraajaRingtoneState
+    val coroutineScope = rememberCoroutineScope()
+    val allTrips by viewModel.allTrips.collectAsStateWithLifecycle()
+    val trip = remember(allTrips, tripId) { 
+        if (tripId == 0 && allTrips.isNotEmpty()) allTrips.first() else allTrips.find { it.id == tripId } 
     }
 
-    var showSavedMessage by remember { mutableStateOf(false) }
+    var customerPhoneInput by remember { mutableStateOf("9043743777") }
+    var passengerNameInput by remember { mutableStateOf("") }
+    var noteStatusMessage by remember { mutableStateOf("") }
 
-    // Live Calculator Preview values
-    val currentBf = baseFareInput.toDoubleOrNull() ?: 0.0
-    val currentFk = farePerKmInput.toDoubleOrNull() ?: 0.0
-    val currentWf = waitFarePerMinInput.toDoubleOrNull() ?: 0.0
-    val sampleKm = 5.0
-    val sampleWaitMin = 3.0
-    val sampleTotalFare = currentBf + (sampleKm * currentFk) + (sampleWaitMin * currentWf)
+    LaunchedEffect(trip) {
+        if (trip != null && trip.passengerNotes.isNotEmpty()) {
+            passengerNameInput = trip.passengerNotes
+        }
+    }
 
     Scaffold(
         topBar = {
             TopAppBar(
-                title = { Text("Fare Engine Config", color = Color.White, fontWeight = FontWeight.Black) },
+                title = { Text("Get Taxi Official Bill", color = Color.White, fontWeight = FontWeight.Black) },
                 navigationIcon = {
                     IconButton(
                         onClick = onNavigateBack,
-                        modifier = Modifier.testTag("back_button")
+                        modifier = Modifier.testTag("receipt_back_button")
                     ) {
                         Icon(
                             imageVector = Icons.AutoMirrored.Filled.ArrowBack,
@@ -108,852 +88,582 @@ fun SettingsScreen(
                 colors = TopAppBarDefaults.topAppBarColors(containerColor = Color(0xFFC62828))
             )
         },
-        containerColor = Color(0xFF8A0000),
-        floatingActionButton = {
-            ExtendedFloatingActionButton(
-                onClick = {
-                    val bf = baseFareInput.toDoubleOrNull() ?: baseFareState
-                    val fk = farePerKmInput.toDoubleOrNull() ?: farePerKmState
-                    val wf = waitFarePerMinInput.toDoubleOrNull() ?: waitFarePerMinState
-                    val st = speedThresholdInput.toDoubleOrNull() ?: speedThresholdState
-                    val ooc = outOfCitySurchargePercentInput.toDoubleOrNull() ?: outOfCitySurchargePercentState
-                    
-                    viewModel.updateBaseFare(bf)
-                    viewModel.updateFarePerKm(fk)
-                    viewModel.updateWaitFarePerMin(wf)
-                    viewModel.updateSpeedThreshold(st)
-                    viewModel.updateCurrency(currencyInput)
-                    viewModel.updateOutOfCitySurchargePercent(ooc)
-                    viewModel.updateAudioEnabled(audioEnabled)
-                    viewModel.updateAutoStartEnabled(autoStartEnabled)
-                    viewModel.updateIlaiyaraajaRingtone(selectedRingtone)
-
-                    com.example.service.LocationTrackingService.startMonitoring(
-                        context = context,
-                        baseFare = bf,
-                        farePerKm = fk,
-                        waitFarePerMin = wf,
-                        currency = currencyInput,
-                        speedThreshold = st,
-                        autoStartEnabled = autoStartEnabled
-                    )
-
-                    showSavedMessage = true
-                },
-                icon = { Icon(Icons.Default.Save, contentDescription = null, tint = Color.White) },
-                text = { Text("Save Config", fontWeight = FontWeight.Black, letterSpacing = 1.sp) },
-                containerColor = Color(0xFFE53935), // Artistic Accent Red
-                contentColor = Color.White,
-                shape = RoundedCornerShape(28.dp),
-                modifier = Modifier.testTag("save_settings_fab")
-            )
-        }
+        containerColor = Color(0xFF8A0000)
     ) { innerPadding ->
-        Column(
-            modifier = Modifier
-                .padding(innerPadding)
-                .fillMaxSize()
-                .padding(16.dp)
-                .verticalScroll(rememberScrollState()),
-            verticalArrangement = Arrangement.spacedBy(16.dp)
-        ) {
+        if (trip == null) {
+            Box(
+                modifier = Modifier
+                    .fillMaxSize()
+                    .padding(innerPadding),
+                contentAlignment = Alignment.Center
+            ) {
+                Text("Receipt session not found.", color = Color(0xFF64748B))
+            }
+        } else {
+            val dateOnlyFormatter = remember { SimpleDateFormat("EEEE, MMM dd, yyyy", Locale.getDefault()) }
+            val timeFormatter = remember { SimpleDateFormat("hh:mm a", Locale.getDefault()) }
             
-            if (showSavedMessage) {
+            val formattedDate = dateOnlyFormatter.format(Date(trip.startTime))
+            val startTimeStr = timeFormatter.format(Date(trip.startTime))
+            val endTimeStr = if (trip.endTime > 0) timeFormatter.format(Date(trip.endTime)) else timeFormatter.format(Date(trip.startTime + (trip.durationSeconds * 1000)))
+            
+            val durationMin = trip.durationSeconds / 60
+            val durationSec = trip.durationSeconds % 60
+            val waitingMin = trip.waitingSeconds / 60
+            val waitingSec = trip.waitingSeconds % 60
+
+            Column(
+                modifier = Modifier
+                    .padding(innerPadding)
+                    .fillMaxSize()
+                    .padding(16.dp)
+                    .verticalScroll(rememberScrollState()),
+                horizontalAlignment = Alignment.CenterHorizontally,
+                verticalArrangement = Arrangement.spacedBy(16.dp)
+            ) {
+                // ELEGANT OFFICIAL TAXI BILL CARD
                 Card(
-                    colors = CardDefaults.cardColors(containerColor = Color(0xFFD1FAE5)), // Soft emerald green
-                    shape = RoundedCornerShape(16.dp),
+                    colors = CardDefaults.cardColors(containerColor = Color(0xFFFBFBF9)), // Clean paper white
+                    shape = RoundedCornerShape(28.dp),
                     modifier = Modifier
                         .fillMaxWidth()
-                        .border(1.dp, Color(0xFFA7F3D0), RoundedCornerShape(16.dp))
+                        .border(1.dp, Color(0xFFE2E8F0), RoundedCornerShape(28.dp))
                 ) {
-                    Row(
-                        modifier = Modifier.padding(16.dp),
-                        verticalAlignment = Alignment.CenterVertically
+                    Column(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(24.dp),
+                        horizontalAlignment = Alignment.CenterHorizontally
                     ) {
-                        Icon(Icons.Default.Info, contentDescription = null, tint = Color(0xFF065F46))
-                        Spacer(modifier = Modifier.width(10.dp))
-                        Text("Fare Engine Configuration Saved & Calculator Updated!", color = Color(0xFF065F46), fontWeight = FontWeight.ExtraBold, fontSize = 13.sp)
-                    }
-                }
-            }
-
-            // QUICK PRESET SELECTION CARD
-            Card(
-                colors = CardDefaults.cardColors(containerColor = Color(0xFFF8FAFC)),
-                shape = RoundedCornerShape(20.dp),
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .border(1.dp, Color(0xFFE2E8F0), RoundedCornerShape(20.dp))
-            ) {
-                Column(modifier = Modifier.padding(16.dp)) {
-                    Text(
-                        text = "TARIFF PRESETS",
-                        color = Color(0xFF64748B),
-                        fontSize = 11.sp,
-                        fontWeight = FontWeight.Bold,
-                        letterSpacing = 1.5.sp
-                    )
-                    Spacer(modifier = Modifier.height(8.dp))
-                    Row(
-                        modifier = Modifier.fillMaxWidth(),
-                        horizontalArrangement = Arrangement.spacedBy(8.dp)
-                    ) {
-                        FilterChip(
-                            selected = currencyInput == "₹" && baseFareInput == "80.0",
-                            onClick = {
-                                baseFareInput = "80.0"
-                                farePerKmInput = "28.0"
-                                waitFarePerMinInput = "2.0"
-                                speedThresholdInput = "5.0"
-                                currencyInput = "₹"
-                            },
-                            label = { Text("🚕 Standard Taxi (₹80/₹28)") },
-                            colors = FilterChipDefaults.filterChipColors(
-                                selectedContainerColor = Color(0xFFDCFCE7),
-                                selectedLabelColor = Color(0xFF15803D)
+                        // Header Logo Image
+                        Box(
+                            modifier = Modifier
+                                .size(72.dp)
+                                .clip(CircleShape)
+                                .background(Color.White)
+                                .border(2.dp, Color(0xFFE53935), CircleShape),
+                            contentAlignment = Alignment.Center
+                        ) {
+                            Image(
+                                painter = painterResource(id = R.drawable.app_logo),
+                                contentDescription = "App Logo",
+                                modifier = Modifier.size(64.dp)
                             )
-                        )
-                    }
-                }
-            }
+                        }
 
-            // LIVE CALCULATOR PREVIEW CARD
-            Card(
-                colors = CardDefaults.cardColors(containerColor = Color(0xFF1E293B)), // Dark slate canvas
-                shape = RoundedCornerShape(24.dp),
-                modifier = Modifier.fillMaxWidth()
-            ) {
-                Column(modifier = Modifier.padding(18.dp)) {
-                    Row(
-                        modifier = Modifier.fillMaxWidth(),
-                        horizontalArrangement = Arrangement.SpaceBetween,
-                        verticalAlignment = Alignment.CenterVertically
-                    ) {
+                        Spacer(modifier = Modifier.height(12.dp))
+
                         Text(
-                            text = "LIVE CALCULATOR PREVIEW",
+                            text = "WELCOME TO GET TAXI METER",
+                            color = Color(0xFFE53935),
+                            fontSize = 12.sp,
+                            fontWeight = FontWeight.Black,
+                            letterSpacing = 1.5.sp
+                        )
+
+                        Text(
+                            text = "TAXICAB OFFICIAL RECEIPT",
+                            color = Color(0xFF0F172A),
+                            fontSize = 18.sp,
+                            fontWeight = FontWeight.Black,
+                            letterSpacing = 0.5.sp,
+                            modifier = Modifier.padding(top = 2.dp)
+                        )
+
+                        Text(
+                            text = "Ref #${String.format(Locale.US, "%05d", trip.id)} • $formattedDate",
+                            color = Color(0xFF64748B),
+                            fontSize = 11.sp,
+                            fontWeight = FontWeight.SemiBold,
+                            modifier = Modifier.padding(top = 2.dp, bottom = 16.dp)
+                        )
+
+                        // Dotted Divider
+                        DottedDivider(color = Color(0xFFCBD5E1))
+
+                        Spacer(modifier = Modifier.height(16.dp))
+
+                        // TRIP TIMINGS & DISTANCE SECTION
+                        Text(
+                            text = "TRIP TIMING & METRICS",
                             color = Color(0xFF94A3B8),
                             fontSize = 10.sp,
                             fontWeight = FontWeight.Bold,
-                            letterSpacing = 1.5.sp
+                            letterSpacing = 1.2.sp,
+                            modifier = Modifier.fillMaxWidth()
                         )
-                        Surface(
-                            color = Color(0xFF22C55E).copy(alpha = 0.2f),
-                            shape = RoundedCornerShape(8.dp)
+
+                        Spacer(modifier = Modifier.height(8.dp))
+
+                        ReceiptLineItem(label = "Start Time", value = startTimeStr)
+                        ReceiptLineItem(label = "End Time", value = endTimeStr)
+                        ReceiptLineItem(label = "Total Driving Distance", value = "${String.format(Locale.US, "%.2f", trip.distanceKm)} km")
+                        ReceiptLineItem(label = "Elapsed Ride Duration", value = "${durationMin}m ${durationSec}s")
+                        ReceiptLineItem(label = "Waiting Time", value = "${waitingMin}m ${waitingSec}s")
+
+                        val pLoc = if (trip.pickupAddress.isNotBlank()) trip.pickupAddress else if (trip.startLatitude != 0.0) "Lat: ${String.format(Locale.US, "%.4f", trip.startLatitude)}, Lng: ${String.format(Locale.US, "%.4f", trip.startLongitude)}" else "GPS Location"
+                        val dLoc = if (trip.dropAddress.isNotBlank()) trip.dropAddress else if (trip.endLatitude != 0.0) "Lat: ${String.format(Locale.US, "%.4f", trip.endLatitude)}, Lng: ${String.format(Locale.US, "%.4f", trip.endLongitude)}" else "GPS Location"
+
+                        ReceiptLineItem(label = "📍 Pick up Location", value = pLoc)
+                        ReceiptLineItem(label = "🏁 Drop Location", value = dLoc)
+
+                        if (trip.startLatitude != 0.0 && trip.endLatitude != 0.0) {
+                            Row(
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .padding(vertical = 4.dp),
+                                horizontalArrangement = Arrangement.End
+                            ) {
+                                TextButton(
+                                    onClick = {
+                                        val mapsUrl = "https://www.google.com/maps/dir/?api=1&origin=${trip.startLatitude},${trip.startLongitude}&destination=${trip.endLatitude},${trip.endLongitude}"
+                                        val intent = Intent(Intent.ACTION_VIEW, Uri.parse(mapsUrl)).apply {
+                                            flags = Intent.FLAG_ACTIVITY_NEW_TASK
+                                        }
+                                        context.startActivity(intent)
+                                    }
+                                ) {
+                                    Icon(Icons.Default.Phone, contentDescription = null, modifier = Modifier.size(14.dp), tint = Color(0xFFE53935))
+                                    Spacer(modifier = Modifier.width(4.dp))
+                                    Text("Open Route on Google Maps 🗺️", fontSize = 11.sp, fontWeight = FontWeight.Bold, color = Color(0xFFE53935))
+                                }
+                            }
+                        }
+
+                        if (trip.passengerNotes.isNotEmpty()) {
+                            ReceiptLineItem(label = "Passenger Notes", value = trip.passengerNotes)
+                        }
+
+                        Spacer(modifier = Modifier.height(12.dp))
+                        DottedDivider(color = Color(0xFFCBD5E1))
+                        Spacer(modifier = Modifier.height(16.dp))
+
+                        // ITEMIZED FARE CHARGES
+                        Text(
+                            text = "CHARGES BREAKDOWN",
+                            color = Color(0xFF94A3B8),
+                            fontSize = 10.sp,
+                            fontWeight = FontWeight.Bold,
+                            letterSpacing = 1.2.sp,
+                            modifier = Modifier.fillMaxWidth()
+                        )
+
+                        Spacer(modifier = Modifier.height(8.dp))
+
+                        // Estimated breakdown values
+                        val estBase = trip.baseFare
+                        val estDistFare = trip.distanceKm * trip.farePerKm
+                        val estWaitFare = (trip.waitingSeconds / 60.0) * trip.waitFarePerMin
+
+                        ReceiptLineItem(label = "Base Fare (Minimum)", value = "$currencySymbol${String.format(Locale.US, "%.2f", estBase)}")
+                        ReceiptLineItem(label = "Distance Fare (${String.format(Locale.US, "%.1f", trip.distanceKm)} km × $currencySymbol${String.format(Locale.US, "%.2f", trip.farePerKm)}/km)", value = "$currencySymbol${String.format(Locale.US, "%.2f", estDistFare)}")
+                        ReceiptLineItem(label = "Waiting Charge (${waitingMin}m ${waitingSec}s × $currencySymbol${String.format(Locale.US, "%.2f", trip.waitFarePerMin)}/min)", value = "$currencySymbol${String.format(Locale.US, "%.2f", estWaitFare)}")
+
+                        if (trip.isOutOfCity) {
+                            ReceiptLineItem(
+                                label = "Out of City Outstation Surcharge", 
+                                value = "+$currencySymbol${String.format(Locale.US, "%.2f", trip.outOfCitySurcharge)}"
+                            )
+                        }
+
+                        Spacer(modifier = Modifier.height(16.dp))
+                        DottedDivider(color = Color(0xFF0F172A))
+                        Spacer(modifier = Modifier.height(16.dp))
+
+                        // TOTAL FARE HIGHLIGHT
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            horizontalArrangement = Arrangement.SpaceBetween,
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            Column {
+                                Text(
+                                    text = "TOTAL AMOUNT DUE",
+                                    color = Color(0xFF0F172A),
+                                    fontSize = 12.sp,
+                                    fontWeight = FontWeight.Black
+                                )
+                                Text(
+                                    text = "All Taxes & Charges Included",
+                                    color = Color(0xFF64748B),
+                                    fontSize = 10.sp
+                                )
+                            }
+                            Text(
+                                text = "$currencySymbol${String.format(Locale.US, "%.2f", trip.totalFare)}",
+                                color = Color(0xFFE53935),
+                                fontSize = 32.sp,
+                                fontWeight = FontWeight.Black,
+                                modifier = Modifier.testTag("receipt_fare_display")
+                            )
+                        }
+
+                        Spacer(modifier = Modifier.height(20.dp))
+
+                        // COURTESY THANK YOU FOOTER
+                        Box(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .background(Color(0xFFFEF2F2), RoundedCornerShape(16.dp))
+                                .border(1.dp, Color(0xFFFEE2E2), RoundedCornerShape(16.dp))
+                                .padding(12.dp),
+                            contentAlignment = Alignment.Center
                         ) {
                             Text(
-                                text = "ESTIMATOR",
-                                color = Color(0xFF86EFAC),
-                                fontSize = 10.sp,
+                                text = "🙏 Thanks for riding with us! Have a wonderful & safe journey!",
+                                color = Color(0xFF991B1B),
+                                fontSize = 12.sp,
                                 fontWeight = FontWeight.Bold,
-                                modifier = Modifier.padding(horizontal = 8.dp, vertical = 2.dp)
+                                textAlign = TextAlign.Center
                             )
                         }
                     }
-
-                    Spacer(modifier = Modifier.height(10.dp))
-
-                    Text(
-                        text = "Sample Trip: 5.0 km distance + 3 mins wait",
-                        color = Color.White,
-                        fontSize = 13.sp,
-                        fontWeight = FontWeight.Medium
-                    )
-
-                    Spacer(modifier = Modifier.height(6.dp))
-
-                    Row(
-                        modifier = Modifier.fillMaxWidth(),
-                        horizontalArrangement = Arrangement.SpaceBetween
-                    ) {
-                        Text(
-                            text = "• Base Fare: $currencyInput${String.format(java.util.Locale.US, "%.2f", currentBf)}",
-                            color = Color(0xFFCBD5E1),
-                            fontSize = 11.sp
-                        )
-                        Text(
-                            text = "• Dist: $currencyInput${String.format(java.util.Locale.US, "%.2f", sampleKm * currentFk)}",
-                            color = Color(0xFFCBD5E1),
-                            fontSize = 11.sp
-                        )
-                        Text(
-                            text = "• Wait: $currencyInput${String.format(java.util.Locale.US, "%.2f", sampleWaitMin * currentWf)}",
-                            color = Color(0xFFCBD5E1),
-                            fontSize = 11.sp
-                        )
-                    }
-
-                    Divider(
-                        color = Color(0xFF334155),
-                        modifier = Modifier.padding(vertical = 10.dp)
-                    )
-
-                    Row(
-                        modifier = Modifier.fillMaxWidth(),
-                        horizontalArrangement = Arrangement.SpaceBetween,
-                        verticalAlignment = Alignment.CenterVertically
-                    ) {
-                        Text(
-                            text = "Estimated Total Fare:",
-                            color = Color(0xFF94A3B8),
-                            fontSize = 12.sp,
-                            fontWeight = FontWeight.Bold
-                        )
-                        Text(
-                            text = "$currencyInput${String.format(java.util.Locale.US, "%.2f", sampleTotalFare)}",
-                            color = Color(0xFF4ADE80), // Emerald 400
-                            fontSize = 22.sp,
-                            fontWeight = FontWeight.Black
-                        )
-                    }
                 }
-            }
 
-            Text(
-                text = "CUSTOM FARE METRICS",
-                color = Color(0xFF94A3B8), // slate-400
-                fontSize = 11.sp,
-                fontWeight = FontWeight.Bold,
-                letterSpacing = 2.0.sp
-            )
-
-            // Base Fare Input Card
-            Card(
-                colors = CardDefaults.cardColors(containerColor = Color.White),
-                shape = RoundedCornerShape(24.dp),
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .border(1.dp, Color(0xFFF1F5F9), RoundedCornerShape(24.dp))
-            ) {
-                Column(modifier = Modifier.padding(18.dp)) {
-                    Text(
-                        text = "Base Fare Setup ($currencyInput)",
-                        color = Color(0xFF1E293B),
-                        fontWeight = FontWeight.Bold,
-                        fontSize = 14.sp
-                    )
-                    Text(
-                        text = "The initial flag drop charge applied when a trip starts.",
-                        color = Color(0xFF64748B),
-                        fontSize = 12.sp,
-                        modifier = Modifier.padding(vertical = 4.dp)
-                    )
-                    OutlinedTextField(
-                        value = baseFareInput,
-                        onValueChange = { baseFareInput = it },
-                        keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
-                        colors = OutlinedTextFieldDefaults.colors(
-                            focusedBorderColor = Color(0xFFE53935),
-                            unfocusedBorderColor = Color(0xFFE2E8F0),
-                            focusedTextColor = Color(0xFF0F172A),
-                            unfocusedTextColor = Color(0xFF0F172A),
-                            cursorColor = Color(0xFFE53935)
-                        ),
-                        shape = RoundedCornerShape(12.dp),
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .testTag("input_base_fare")
-                    )
-                }
-            }
-
-            // Fare Per Kilometer Card
-            Card(
-                colors = CardDefaults.cardColors(containerColor = Color.White),
-                shape = RoundedCornerShape(24.dp),
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .border(1.dp, Color(0xFFF1F5F9), RoundedCornerShape(24.dp))
-            ) {
-                Column(modifier = Modifier.padding(18.dp)) {
-                    Text(
-                        text = "Distance Rate ($currencyInput per KM)",
-                        color = Color(0xFF1E293B),
-                        fontWeight = FontWeight.Bold,
-                        fontSize = 14.sp
-                    )
-                    Text(
-                        text = "The rate charged per physical kilometer driven during service.",
-                        color = Color(0xFF64748B),
-                        fontSize = 12.sp,
-                        modifier = Modifier.padding(vertical = 4.dp)
-                    )
-                    OutlinedTextField(
-                        value = farePerKmInput,
-                        onValueChange = { farePerKmInput = it },
-                        keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
-                        colors = OutlinedTextFieldDefaults.colors(
-                            focusedBorderColor = Color(0xFFE53935),
-                            unfocusedBorderColor = Color(0xFFE2E8F0),
-                            focusedTextColor = Color(0xFF0F172A),
-                            unfocusedTextColor = Color(0xFF0F172A),
-                            cursorColor = Color(0xFFE53935)
-                        ),
-                        shape = RoundedCornerShape(12.dp),
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .testTag("input_fare_per_km")
-                    )
-                }
-            }
-
-            // Waiting Charge Card
-            Card(
-                colors = CardDefaults.cardColors(containerColor = Color.White),
-                shape = RoundedCornerShape(24.dp),
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .border(1.dp, Color(0xFFF1F5F9), RoundedCornerShape(24.dp))
-            ) {
-                Column(modifier = Modifier.padding(18.dp)) {
-                    Text(
-                        text = "Wait Charges ($currencyInput per Minute)",
-                        color = Color(0xFF1E293B),
-                        fontWeight = FontWeight.Bold,
-                        fontSize = 14.sp
-                    )
-                    Text(
-                        text = "The charge accumulated per minute when speed is below threshold.",
-                        color = Color(0xFF64748B),
-                        fontSize = 12.sp,
-                        modifier = Modifier.padding(vertical = 4.dp)
-                    )
-                    OutlinedTextField(
-                        value = waitFarePerMinInput,
-                        onValueChange = { waitFarePerMinInput = it },
-                        keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
-                        colors = OutlinedTextFieldDefaults.colors(
-                            focusedBorderColor = Color(0xFFE53935),
-                            unfocusedBorderColor = Color(0xFFE2E8F0),
-                            focusedTextColor = Color(0xFF0F172A),
-                            unfocusedTextColor = Color(0xFF0F172A),
-                            cursorColor = Color(0xFFE53935)
-                        ),
-                        shape = RoundedCornerShape(12.dp),
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .testTag("input_wait_fare_per_min")
-                    )
-                }
-            }
-
-            // Speed Threshold Card
-            Card(
-                colors = CardDefaults.cardColors(containerColor = Color.White),
-                shape = RoundedCornerShape(24.dp),
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .border(1.dp, Color(0xFFF1F5F9), RoundedCornerShape(24.dp))
-            ) {
-                Column(modifier = Modifier.padding(18.dp)) {
-                    Text(
-                        text = "Wait Speed Threshold (km/h)",
-                        color = Color(0xFF1E293B),
-                        fontWeight = FontWeight.Bold,
-                        fontSize = 14.sp
-                    )
-                    Text(
-                        text = "Speed boundary (km/h) below which wait billing takes effect.",
-                        color = Color(0xFF64748B),
-                        fontSize = 12.sp,
-                        modifier = Modifier.padding(vertical = 4.dp)
-                    )
-                    OutlinedTextField(
-                        value = speedThresholdInput,
-                        onValueChange = { speedThresholdInput = it },
-                        keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
-                        colors = OutlinedTextFieldDefaults.colors(
-                            focusedBorderColor = Color(0xFFE53935),
-                            unfocusedBorderColor = Color(0xFFE2E8F0),
-                            focusedTextColor = Color(0xFF0F172A),
-                            unfocusedTextColor = Color(0xFF0F172A),
-                            cursorColor = Color(0xFFE53935)
-                        ),
-                        shape = RoundedCornerShape(12.dp),
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .testTag("input_speed_threshold")
-                    )
-                }
-            }
-
-            // Out of City Surcharge & Mode Toggle Card
-            Card(
-                colors = CardDefaults.cardColors(
-                    containerColor = if (tripState.isOutOfCity) Color(0xFFFFF7ED) else Color.White
-                ),
-                shape = RoundedCornerShape(24.dp),
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .border(
-                        width = 1.5.dp,
-                        color = if (tripState.isOutOfCity) Color(0xFFEA580C) else Color(0xFFF1F5F9),
-                        shape = RoundedCornerShape(24.dp)
-                    )
-            ) {
-                Column(modifier = Modifier.padding(18.dp)) {
-                    Row(
-                        modifier = Modifier.fillMaxWidth(),
-                        horizontalArrangement = Arrangement.SpaceBetween,
-                        verticalAlignment = Alignment.CenterVertically
-                    ) {
-                        Row(
-                            verticalAlignment = Alignment.CenterVertically,
-                            modifier = Modifier.weight(1f)
-                        ) {
+                // DIRECT WHATSAPP BILL SENDING CARD
+                Card(
+                    colors = CardDefaults.cardColors(containerColor = Color.White),
+                    shape = RoundedCornerShape(24.dp),
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .border(1.dp, Color(0xFFF1F5F9), RoundedCornerShape(24.dp))
+                ) {
+                    Column(modifier = Modifier.padding(20.dp)) {
+                        Row(verticalAlignment = Alignment.CenterVertically) {
                             Box(
                                 modifier = Modifier
                                     .size(36.dp)
-                                    .background(
-                                        color = if (tripState.isOutOfCity) Color(0xFFFFEDD5) else Color(0xFFF1F5F9),
-                                        shape = CircleShape
-                                    ),
+                                    .background(Color(0xFF25D366), CircleShape),
                                 contentAlignment = Alignment.Center
                             ) {
                                 Icon(
-                                    imageVector = Icons.Default.Explore,
-                                    contentDescription = null,
-                                    tint = if (tripState.isOutOfCity) Color(0xFFEA580C) else Color(0xFF64748B),
+                                    imageVector = Icons.Default.Phone,
+                                    contentDescription = "WhatsApp",
+                                    tint = Color.White,
                                     modifier = Modifier.size(20.dp)
                                 )
                             }
                             Spacer(modifier = Modifier.width(12.dp))
                             Column {
-                                Row(verticalAlignment = Alignment.CenterVertically) {
-                                    Text(
-                                        text = "Out of City Charges Mode",
-                                        fontWeight = FontWeight.Bold,
-                                        fontSize = 14.sp,
-                                        color = Color(0xFF0F172A)
-                                    )
-                                    if (tripState.isOutOfCity) {
-                                        Spacer(modifier = Modifier.width(6.dp))
-                                        Text(
-                                            text = "ACTIVE",
-                                            fontWeight = FontWeight.Black,
-                                            fontSize = 9.sp,
-                                            color = Color(0xFFEA580C),
-                                            modifier = Modifier
-                                                .background(Color(0xFFFFEDD5), RoundedCornerShape(4.dp))
-                                                .padding(horizontal = 6.dp, vertical = 2.dp)
-                                        )
-                                    }
-                                }
                                 Text(
-                                    text = if (tripState.isOutOfCity)
-                                        "Outstation tariff active (+${outOfCitySurchargePercentInput}% surcharge)"
-                                    else
-                                        "Enable outstation return tariff for long distance rides",
-                                    fontSize = 11.sp,
-                                    color = if (tripState.isOutOfCity) Color(0xFFC2410C) else Color(0xFF64748B)
-                                )
-                            }
-                        }
-
-                        Switch(
-                            checked = tripState.isOutOfCity,
-                            onCheckedChange = { enabled ->
-                                val surchargePct = outOfCitySurchargePercentInput.toDoubleOrNull() ?: outOfCitySurchargePercentState
-                                LocationTrackingService.toggleOutOfCity(context, enabled, surchargePct)
-                            },
-                            colors = SwitchDefaults.colors(
-                                checkedThumbColor = Color.White,
-                                checkedTrackColor = Color(0xFFEA580C),
-                                uncheckedThumbColor = Color(0xFF94A3B8),
-                                uncheckedTrackColor = Color(0xFFE2E8F0)
-                            ),
-                            modifier = Modifier.testTag("toggle_out_of_city")
-                        )
-                    }
-
-                    HorizontalDivider(
-                        color = if (tripState.isOutOfCity) Color(0xFFFED7AA) else Color(0xFFF1F5F9),
-                        modifier = Modifier.padding(vertical = 12.dp)
-                    )
-
-                    Text(
-                        text = "Out of City Surcharge Rate (%)",
-                        color = Color(0xFF1E293B),
-                        fontWeight = FontWeight.Bold,
-                        fontSize = 13.sp
-                    )
-                    Text(
-                        text = "Percentage added to base + distance fare when Out of City mode is enabled.",
-                        color = Color(0xFF64748B),
-                        fontSize = 11.sp,
-                        modifier = Modifier.padding(vertical = 2.dp)
-                    )
-                    OutlinedTextField(
-                        value = outOfCitySurchargePercentInput,
-                        onValueChange = { outOfCitySurchargePercentInput = it },
-                        keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
-                        colors = OutlinedTextFieldDefaults.colors(
-                            focusedBorderColor = Color(0xFFEA580C),
-                            unfocusedBorderColor = Color(0xFFE2E8F0),
-                            focusedTextColor = Color(0xFF0F172A),
-                            unfocusedTextColor = Color(0xFF0F172A),
-                            cursorColor = Color(0xFFEA580C)
-                        ),
-                        shape = RoundedCornerShape(12.dp),
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .testTag("input_out_of_city_surcharge")
-                    )
-                }
-            }
-
-            // Currency Symbol Card with Indian Rupee (₹) and Other Symbol Chips
-            Card(
-                colors = CardDefaults.cardColors(containerColor = Color.White),
-                shape = RoundedCornerShape(24.dp),
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .border(1.dp, Color(0xFFF1F5F9), RoundedCornerShape(24.dp))
-            ) {
-                Column(modifier = Modifier.padding(18.dp)) {
-                    Text(
-                        text = "Currency Symbol",
-                        color = Color(0xFF1E293B),
-                        fontWeight = FontWeight.Bold,
-                        fontSize = 14.sp
-                    )
-                    Text(
-                        text = "Select a preset symbol or type a custom currency sign.",
-                        color = Color(0xFF64748B),
-                        fontSize = 12.sp,
-                        modifier = Modifier.padding(vertical = 4.dp)
-                    )
-
-                    Row(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .padding(vertical = 6.dp),
-                        horizontalArrangement = Arrangement.spacedBy(8.dp)
-                    ) {
-                        listOf("₹", "$", "€", "£", "¥").forEach { symbol ->
-                            FilterChip(
-                                selected = currencyInput == symbol,
-                                onClick = { currencyInput = symbol },
-                                label = { Text(symbol, fontWeight = FontWeight.Bold) },
-                                colors = FilterChipDefaults.filterChipColors(
-                                    selectedContainerColor = Color(0xFFE53935),
-                                    selectedLabelColor = Color.White
-                                )
-                            )
-                        }
-                    }
-
-                    OutlinedTextField(
-                        value = currencyInput,
-                        onValueChange = { currencyInput = it },
-                        colors = OutlinedTextFieldDefaults.colors(
-                            focusedBorderColor = Color(0xFFE53935),
-                            unfocusedBorderColor = Color(0xFFE2E8F0),
-                            focusedTextColor = Color(0xFF0F172A),
-                            unfocusedTextColor = Color(0xFF0F172A),
-                            cursorColor = Color(0xFFE53935)
-                        ),
-                        shape = RoundedCornerShape(12.dp),
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .testTag("input_currency")
-                    )
-                }
-            }
-
-            // Sound Toggle Card
-            Card(
-                colors = CardDefaults.cardColors(containerColor = Color.White),
-                shape = RoundedCornerShape(24.dp),
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .border(1.dp, Color(0xFFF1F5F9), RoundedCornerShape(24.dp))
-            ) {
-                Row(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .padding(18.dp),
-                    horizontalArrangement = Arrangement.SpaceBetween,
-                    verticalAlignment = Alignment.CenterVertically
-                ) {
-                    Column(modifier = Modifier.weight(1f)) {
-                        Text(
-                            text = "Auto-Start Meter on Movement",
-                            color = Color(0xFF1E293B),
-                            fontWeight = FontWeight.Bold,
-                            fontSize = 14.sp
-                        )
-                        Text(
-                            text = "Automatically starts or resumes the meter when vehicle speed exceeds the threshold.",
-                            color = Color(0xFF64748B),
-                            fontSize = 12.sp
-                        )
-                    }
-
-                    Switch(
-                        checked = autoStartEnabled,
-                        onCheckedChange = { autoStartEnabled = it },
-                        colors = SwitchDefaults.colors(
-                            checkedThumbColor = Color.White,
-                            checkedTrackColor = Color(0xFFE53935),
-                            uncheckedThumbColor = Color(0xFF94A3B8),
-                            uncheckedTrackColor = Color(0xFFE2E8F0)
-                        ),
-                        modifier = Modifier.testTag("toggle_autostart")
-                    )
-                }
-            }
-
-            // Sound Toggle Card
-            Card(
-                colors = CardDefaults.cardColors(containerColor = Color.White),
-                shape = RoundedCornerShape(24.dp),
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .border(1.dp, Color(0xFFF1F5F9), RoundedCornerShape(24.dp))
-            ) {
-                Row(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .padding(18.dp),
-                    horizontalArrangement = Arrangement.SpaceBetween,
-                    verticalAlignment = Alignment.CenterVertically
-                ) {
-                    Column(modifier = Modifier.weight(1f)) {
-                        Text(
-                            text = "Sound & TTS Announcements",
-                            color = Color(0xFF1E293B),
-                            fontWeight = FontWeight.Bold,
-                            fontSize = 14.sp
-                        )
-                        Text(
-                            text = "Enables voice assistant readouts for trip start, pause, and endpoints.",
-                            color = Color(0xFF64748B),
-                            fontSize = 12.sp
-                        )
-                    }
-
-                    Switch(
-                        checked = audioEnabled,
-                        onCheckedChange = { audioEnabled = it },
-                        colors = SwitchDefaults.colors(
-                            checkedThumbColor = Color.White,
-                            checkedTrackColor = Color(0xFFE53935), // Red Hot Accent Spec
-                            uncheckedThumbColor = Color(0xFF94A3B8), // slate-400
-                            uncheckedTrackColor = Color(0xFFE2E8F0) // slate-200
-                        ),
-                        modifier = Modifier.testTag("toggle_audio")
-                    )
-                }
-            }
-
-            // System Notification Alert Card
-            Card(
-                colors = CardDefaults.cardColors(containerColor = Color.White),
-                shape = RoundedCornerShape(24.dp),
-                elevation = CardDefaults.cardElevation(defaultElevation = 2.dp),
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .border(1.5.dp, Color(0xFFE2E8F0), RoundedCornerShape(24.dp))
-                    .testTag("system_sound_card")
-            ) {
-                Column(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .padding(18.dp),
-                    verticalArrangement = Arrangement.spacedBy(10.dp)
-                ) {
-                    Row(
-                        verticalAlignment = Alignment.CenterVertically,
-                        horizontalArrangement = Arrangement.SpaceBetween,
-                        modifier = Modifier.fillMaxWidth()
-                    ) {
-                        Row(verticalAlignment = Alignment.CenterVertically) {
-                            Surface(
-                                color = Color(0xFF475569),
-                                shape = CircleShape,
-                                modifier = Modifier.size(38.dp)
-                            ) {
-                                Box(contentAlignment = Alignment.Center) {
-                                    Icon(
-                                        imageVector = Icons.Default.Notifications,
-                                        contentDescription = "Notification Alerts",
-                                        tint = Color.White,
-                                        modifier = Modifier.size(20.dp)
-                                    )
-                                }
-                            }
-                            Spacer(modifier = Modifier.width(10.dp))
-                            Column {
-                                Text(
-                                    text = "SYSTEM NOTIFICATION CHANNELS",
-                                    color = Color(0xFF1E293B),
-                                    fontWeight = FontWeight.Black,
-                                    fontSize = 13.sp,
-                                    letterSpacing = 0.5.sp
-                                )
-                                Text(
-                                    text = "Standard Android Sound & Vibration",
-                                    color = Color(0xFF475569),
+                                    text = "Send Bill Directly to Customer",
+                                    color = Color(0xFF0F172A),
                                     fontWeight = FontWeight.Bold,
+                                    fontSize = 15.sp
+                                )
+                                Text(
+                                    text = "Enter customer WhatsApp number to send invoice instantly.",
+                                    color = Color(0xFF64748B),
                                     fontSize = 11.sp
                                 )
                             }
                         }
-                    }
 
-                    Text(
-                        text = "Incoming trip alerts leverage high-priority standard Android system notification sounds and physical haptic vibration to eliminate UI thread overhead and maximize reliability.",
-                        color = Color(0xFF64748B),
-                        fontSize = 12.sp,
-                        lineHeight = 16.sp
-                    )
-                }
-            }
-
-            // Admin Utilities Section
-
-            var showAdminPinDialog by remember { mutableStateOf(false) }
-
-            var adminPinInput by remember { mutableStateOf("") }
-
-            var resetStatus by remember { mutableStateOf("") }
-
-
-
-            Spacer(modifier = Modifier.height(16.dp))
-
-            Text(text = "ADMIN UTILITIES", color = Color(0xFFC62828), fontWeight = FontWeight.Black, fontSize = 14.sp, modifier = Modifier.padding(start = 8.dp))
-
-            
-
-            Card(
-
-                colors = CardDefaults.cardColors(containerColor = Color.White),
-
-                shape = RoundedCornerShape(24.dp),
-
-                modifier = Modifier.fillMaxWidth().border(1.dp, Color(0xFFF1F5F9), RoundedCornerShape(24.dp))
-
-            ) {
-
-                Column(
-
-                    modifier = Modifier.fillMaxWidth().padding(18.dp),
-
-                    verticalArrangement = Arrangement.spacedBy(10.dp)
-
-                ) {
-
-                    Text(text = "Danger Zone", color = Color(0xFFC62828), fontWeight = FontWeight.Bold, fontSize = 14.sp)
-
-                    Text(text = "Reset the fleet driver ID counter back to DRV-0011 and clear all driver mappings.", color = Color(0xFF64748B), fontSize = 12.sp)
-
-                    Button(
-
-                        onClick = { showAdminPinDialog = true },
-
-                        colors = ButtonDefaults.buttonColors(containerColor = Color(0xFFC62828)),
-
-                        shape = RoundedCornerShape(12.dp),
-
-                        modifier = Modifier.fillMaxWidth().height(48.dp)
-
-                    ) {
-
-                        Text(text = "RESET DRIVER ID COUNTER", fontWeight = FontWeight.Bold)
-
-                    }
-
-                    if (resetStatus.isNotBlank()) {
-
-                        Text(text = resetStatus, color = if (resetStatus.contains("Success")) Color(0xFF2E7D32) else Color(0xFFC62828), fontSize = 12.sp, fontWeight = FontWeight.Bold)
-
-                    }
-
-                }
-
-            }
-
-
-
-            if (showAdminPinDialog) {
-
-                AlertDialog(
-
-                    onDismissRequest = { showAdminPinDialog = false; adminPinInput = "" },
-
-                    title = { Text("Admin PIN Required") },
-
-                    text = {
+                        Spacer(modifier = Modifier.height(16.dp))
 
                         OutlinedTextField(
-
-                            value = adminPinInput,
-
-                            onValueChange = { adminPinInput = it },
-
-                            label = { Text("Enter PIN") },
-
-                            keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.NumberPassword),
-
-                            singleLine = true
-
+                            value = customerPhoneInput,
+                            onValueChange = { customerPhoneInput = it },
+                            label = { Text("Customer Mobile / WhatsApp Number") },
+                            placeholder = { Text("e.g. 9043743777") },
+                            keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Phone),
+                            leadingIcon = {
+                                Icon(
+                                    imageVector = Icons.Default.Phone,
+                                    contentDescription = null,
+                                    tint = Color(0xFF25D366)
+                                )
+                            },
+                            colors = OutlinedTextFieldDefaults.colors(
+                                focusedBorderColor = Color(0xFF25D366),
+                                unfocusedBorderColor = Color(0xFFCBD5E1),
+                                focusedTextColor = Color(0xFF0F172A),
+                                unfocusedTextColor = Color(0xFF0F172A),
+                                cursorColor = Color(0xFF25D366)
+                            ),
+                            shape = RoundedCornerShape(12.dp),
+                            modifier = Modifier.fillMaxWidth()
                         )
 
-                    },
+                        Spacer(modifier = Modifier.height(12.dp))
 
-                    confirmButton = {
-
-                        Button(onClick = {
-
-                            if (adminPinInput == "2481") {
-
-                                resetStatus = "Resetting..."
-
-                                com.example.data.remote.FirebaseSyncManager.resetDriverIdCounter { success ->
-
-                                    resetStatus = if (success) "Successfully reset counter and cleared mappings!" else "Failed to reset counter."
-
-                                }
-
-                                showAdminPinDialog = false
-
-                                adminPinInput = ""
-
-                            } else {
-
-                                resetStatus = "Invalid PIN"
-
-                                showAdminPinDialog = false
-
-                                adminPinInput = ""
-
-                            }
-
-                        }) {
-
-                            Text("CONFIRM")
-
+                        Button(
+                            onClick = {
+                                sendBillViaWhatsApp(
+                                    context = context,
+                                    phone = customerPhoneInput,
+                                    trip = trip,
+                                    currency = currencySymbol,
+                                    startTimeStr = startTimeStr,
+                                    endTimeStr = endTimeStr,
+                                    durationMin = durationMin,
+                                    durationSec = durationSec,
+                                    waitingMin = waitingMin,
+                                    waitingSec = waitingSec
+                                )
+                            },
+                            colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF25D366)),
+                            shape = RoundedCornerShape(16.dp),
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .height(50.dp)
+                        ) {
+                            Text(
+                                text = "SEND BILL VIA WHATSAPP",
+                                fontWeight = FontWeight.ExtraBold,
+                                fontSize = 13.sp,
+                                color = Color.White,
+                                letterSpacing = 1.sp
+                            )
                         }
-
-                    },
-
-                    dismissButton = {
-
-                        TextButton(onClick = { showAdminPinDialog = false; adminPinInput = "" }) {
-
-                            Text("CANCEL")
-
-                        }
-
                     }
+                }
 
-                )
+                // PASSENGER NOTES CARD
+                Card(
+                    colors = CardDefaults.cardColors(containerColor = Color.White),
+                    shape = RoundedCornerShape(24.dp),
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .border(1.dp, Color(0xFFF1F5F9), RoundedCornerShape(24.dp))
+                ) {
+                    Column(modifier = Modifier.padding(20.dp)) {
+                        Text(
+                            text = "Passenger Name / Ref Notes",
+                            color = Color(0xFF1E293B),
+                            fontWeight = FontWeight.Bold,
+                            fontSize = 14.sp
+                        )
+                        Spacer(modifier = Modifier.height(8.dp))
+                        OutlinedTextField(
+                            value = passengerNameInput,
+                            onValueChange = { passengerNameInput = it },
+                            placeholder = { Text("e.g. John Doe / Booking #102") },
+                            colors = OutlinedTextFieldDefaults.colors(
+                                focusedBorderColor = Color(0xFFE53935),
+                                unfocusedBorderColor = Color(0xFFE2E8F0)
+                            ),
+                            shape = RoundedCornerShape(12.dp),
+                            modifier = Modifier.fillMaxWidth()
+                        )
+                        Spacer(modifier = Modifier.height(8.dp))
+                        Button(
+                            onClick = {
+                                coroutineScope.launch {
+                                    val db = com.example.data.database.TripDatabase.getDatabase(context)
+                                    db.tripDao().insertTrip(trip.copy(passengerNotes = passengerNameInput))
+                                    noteStatusMessage = "Note saved successfully!"
+                                }
+                            },
+                            colors = ButtonDefaults.buttonColors(containerColor = Color.White),
+                            border = BorderStroke(1.5.dp, Color(0xFFE53935)),
+                            shape = RoundedCornerShape(12.dp),
+                            modifier = Modifier.align(Alignment.End)
+                        ) {
+                            Icon(Icons.Default.NoteAdd, contentDescription = null, tint = Color(0xFFE53935), modifier = Modifier.size(16.dp))
+                            Spacer(modifier = Modifier.width(6.dp))
+                            Text("Save Note", fontSize = 12.sp, fontWeight = FontWeight.Bold, color = Color(0xFFE53935))
+                        }
 
+                        if (noteStatusMessage.isNotEmpty()) {
+                            Text(
+                                text = noteStatusMessage,
+                                color = Color(0xFF10B981),
+                                fontSize = 11.sp,
+                                modifier = Modifier.padding(top = 4.dp)
+                            )
+                        }
+                    }
+                }
+
+                // GENERAL SHARE BUTTON
+                Button(
+                    onClick = {
+                        shareReceiptNative(
+                            context = context,
+                            trip = trip,
+                            currency = currencySymbol,
+                            startTimeStr = startTimeStr,
+                            endTimeStr = endTimeStr,
+                            durationMin = durationMin,
+                            durationSec = durationSec,
+                            waitingMin = waitingMin,
+                            waitingSec = waitingSec
+                        )
+                    },
+                    colors = ButtonDefaults.buttonColors(containerColor = Color(0xFFE53935)),
+                    shape = RoundedCornerShape(32.dp),
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .height(54.dp)
+                        .testTag("share_receipt_button")
+                ) {
+                    Icon(imageVector = Icons.Default.Share, contentDescription = null, tint = Color.White)
+                    Spacer(modifier = Modifier.width(8.dp))
+                    Text(
+                        text = "SHARE RECEIPT TO OTHER APPS",
+                        fontWeight = FontWeight.Black,
+                        fontSize = 13.sp,
+                        color = Color.White,
+                        letterSpacing = 1.sp
+                    )
+                }
+
+                Spacer(modifier = Modifier.height(24.dp))
             }
-
-
-            Spacer(modifier = Modifier.height(80.dp)) // Avoid hiding behind FAB
         }
     }
+}
+
+@Composable
+fun ReceiptLineItem(label: String, value: String) {
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(vertical = 4.dp),
+        horizontalArrangement = Arrangement.SpaceBetween
+    ) {
+        Text(text = label, color = Color(0xFF64748B), fontSize = 12.sp, fontWeight = FontWeight.Medium)
+        Text(text = value, color = Color(0xFF0F172A), fontSize = 12.sp, fontWeight = FontWeight.Bold)
+    }
+}
+
+@Composable
+fun DottedDivider(color: Color) {
+    Canvas(
+        modifier = Modifier
+            .fillMaxWidth()
+            .height(1.dp)
+    ) {
+        drawLine(
+            color = color,
+            start = Offset(0f, 0f),
+            end = Offset(size.width, 0f),
+            pathEffect = PathEffect.dashPathEffect(floatArrayOf(10f, 10f), 0f)
+        )
+    }
+}
+
+private fun buildBillTextMessage(
+    trip: TripEntity,
+    currency: String,
+    startTimeStr: String,
+    endTimeStr: String,
+    durationMin: Long,
+    durationSec: Long,
+    waitingMin: Long,
+    waitingSec: Long
+): String {
+    val dateOnlyFormatter = SimpleDateFormat("dd MMM yyyy", Locale.getDefault())
+    val dateStr = dateOnlyFormatter.format(Date(trip.startTime))
+    val passenger = if (trip.passengerNotes.isNotEmpty()) "\n👤 Passenger: ${trip.passengerNotes}" else ""
+
+    val pLoc = if (trip.pickupAddress.isNotBlank()) trip.pickupAddress else if (trip.startLatitude != 0.0) "Lat: ${String.format(Locale.US, "%.4f", trip.startLatitude)}, Lng: ${String.format(Locale.US, "%.4f", trip.startLongitude)}" else "GPS Location"
+    val dLoc = if (trip.dropAddress.isNotBlank()) trip.dropAddress else if (trip.endLatitude != 0.0) "Lat: ${String.format(Locale.US, "%.4f", trip.endLatitude)}, Lng: ${String.format(Locale.US, "%.4f", trip.endLongitude)}" else "GPS Location"
+
+    val outOfCityText = if (trip.isOutOfCity) {
+        "\n🛣️ Out of City Surcharge: $currency${String.format(Locale.US, "%.2f", trip.outOfCitySurcharge)}"
+    } else ""
+
+    val mapLinkText = if (trip.startLatitude != 0.0 && trip.endLatitude != 0.0) {
+        "\n🗺️ Google Maps Route: https://www.google.com/maps/dir/?api=1&origin=${trip.startLatitude},${trip.startLongitude}&destination=${trip.endLatitude},${trip.endLongitude}"
+    } else ""
+
+    return """
+🚕 *GET TAXI METER - OFFICIAL TRIP BILL* 🚕
+WELCOME TO GET TAXI METER!
+
+📅 Date: $dateStr
+⏰ Start Time: $startTimeStr
+⏰ End Time: $endTimeStr
+⏱️ Ride Duration: ${durationMin}m ${durationSec}s
+⏳ Waiting Time: ${waitingMin}m ${waitingSec}s
+📍 Pick up Location: $pLoc
+🏁 Drop Location: $dLoc
+🛣️ Total Distance: ${String.format(Locale.US, "%.2f", trip.distanceKm)} km$passenger$mapLinkText
+
+----------------------------------
+💰 Base Fare: $currency${String.format(Locale.US, "%.2f", trip.baseFare)}
+🛣️ Distance Charge: $currency${String.format(Locale.US, "%.2f", trip.distanceKm * trip.farePerKm)}
+⌛ Wait Charge: $currency${String.format(Locale.US, "%.2f", (trip.waitingSeconds / 60.0) * trip.waitFarePerMin)}$outOfCityText
+----------------------------------
+💳 *TOTAL FARE DUE: $currency${String.format(Locale.US, "%.2f", trip.totalFare)}*
+==================================
+
+🙏 Thanks for riding with us! Have a safe & wonderful journey!
+    """.trimIndent()
+}
+
+private fun sendBillViaWhatsApp(
+    context: Context,
+    phone: String,
+    trip: TripEntity,
+    currency: String,
+    startTimeStr: String,
+    endTimeStr: String,
+    durationMin: Long,
+    durationSec: Long,
+    waitingMin: Long,
+    waitingSec: Long
+) {
+    val text = buildBillTextMessage(
+        trip = trip,
+        currency = currency,
+        startTimeStr = startTimeStr,
+        endTimeStr = endTimeStr,
+        durationMin = durationMin,
+        durationSec = durationSec,
+        waitingMin = waitingMin,
+        waitingSec = waitingSec
+    )
+
+    try {
+        val cleanPhone = phone.replace("+", "").replace(" ", "").replace("-", "")
+        val encodedText = Uri.encode(text)
+        val url = "https://api.whatsapp.com/send?phone=$cleanPhone&text=$encodedText"
+        val intent = Intent(Intent.ACTION_VIEW, Uri.parse(url)).apply {
+            flags = Intent.FLAG_ACTIVITY_NEW_TASK
+        }
+        context.startActivity(intent)
+    } catch (e: Exception) {
+        val sendIntent = Intent(Intent.ACTION_SEND).apply {
+            putExtra(Intent.EXTRA_TEXT, text)
+            type = "text/plain"
+            flags = Intent.FLAG_ACTIVITY_NEW_TASK
+        }
+        context.startActivity(Intent.createChooser(sendIntent, "Share Receipt Bill"))
+    }
+}
+
+private fun shareReceiptNative(
+    context: Context,
+    trip: TripEntity,
+    currency: String,
+    startTimeStr: String,
+    endTimeStr: String,
+    durationMin: Long,
+    durationSec: Long,
+    waitingMin: Long,
+    waitingSec: Long
+) {
+    val text = buildBillTextMessage(
+        trip = trip,
+        currency = currency,
+        startTimeStr = startTimeStr,
+        endTimeStr = endTimeStr,
+        durationMin = durationMin,
+        durationSec = durationSec,
+        waitingMin = waitingMin,
+        waitingSec = waitingSec
+    )
+
+    val sendIntent: Intent = Intent().apply {
+        action = Intent.ACTION_SEND
+        putExtra(Intent.EXTRA_TEXT, text)
+        type = "text/plain"
+    }
+
+    val shareIntent = Intent.createChooser(sendIntent, "Share Taxi Invoice Receipt")
+    shareIntent.flags = Intent.FLAG_ACTIVITY_NEW_TASK
+    context.startActivity(shareIntent)
 }

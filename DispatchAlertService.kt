@@ -1,139 +1,35 @@
-package com.example.data.preferences
+package com.example.data.repository
 
-import android.content.Context
-import androidx.datastore.core.DataStore
-import androidx.datastore.preferences.core.*
-import androidx.datastore.preferences.preferencesDataStore
+import com.example.data.database.ActiveTripRecord
+import com.example.data.database.TripDao
+import com.example.data.database.TripEntity
 import kotlinx.coroutines.flow.Flow
-import kotlinx.coroutines.flow.map
 
-private val Context.dataStore: DataStore<Preferences> by preferencesDataStore(name = "taxi_meter_settings")
+class TripRepository(private val tripDao: TripDao) {
 
-class SettingsRepository(private val context: Context) {
+    val allTrips: Flow<List<TripEntity>> = tripDao.getAllTrips()
 
-    companion object {
-        val KEY_BASE_FARE = doublePreferencesKey("base_fare")
-        val KEY_FARE_PER_KM = doublePreferencesKey("fare_per_km")
-        val KEY_WAIT_FARE_PER_MIN = doublePreferencesKey("wait_fare_per_min")
-        val KEY_SPEED_THRESHOLD = doublePreferencesKey("speed_threshold") // in km/h
-        val KEY_AUDIO_ENABLED = booleanPreferencesKey("audio_enabled")
-        val KEY_AUTO_START_ENABLED = booleanPreferencesKey("auto_start_enabled")
-        val KEY_CURRENCY = stringPreferencesKey("currency")
-        val KEY_OUT_OF_CITY_SURCHARGE_TYPE = stringPreferencesKey("out_of_city_surcharge_type") // "FIXED_AMOUNT" or "PERCENTAGE"
-        val KEY_OUT_OF_CITY_SURCHARGE_FIXED_AMOUNT = doublePreferencesKey("out_of_city_surcharge_fixed_amount")
-        val KEY_OUT_OF_CITY_SURCHARGE_PERCENT = doublePreferencesKey("out_of_city_surcharge_percent")
-        val KEY_ILAIYARAAJA_RINGTONE = stringPreferencesKey("ilaiyaraaja_ringtone")
+    suspend fun getTripById(id: Int): TripEntity? {
+        return tripDao.getTripById(id)
     }
 
-    val ilaiyaraajaRingtone: Flow<String> = context.dataStore.data.map { preferences ->
-        preferences[KEY_ILAIYARAAJA_RINGTONE] ?: "ACCORDION_GROOVE"
+    suspend fun insertTrip(trip: TripEntity): Long {
+        return tripDao.insertTrip(trip)
     }
 
-    // Default configuration values
-    val baseFare: Flow<Double> = context.dataStore.data.map { preferences ->
-        preferences[KEY_BASE_FARE] ?: 80.00
+    suspend fun deleteTripById(id: Int) {
+        tripDao.deleteTripById(id)
     }
 
-    val farePerKm: Flow<Double> = context.dataStore.data.map { preferences ->
-        preferences[KEY_FARE_PER_KM] ?: 28.00
+    suspend fun getActiveTrip(): ActiveTripRecord? {
+        return tripDao.getActiveTrip()
     }
 
-    val waitFarePerMin: Flow<Double> = context.dataStore.data.map { preferences ->
-        preferences[KEY_WAIT_FARE_PER_MIN] ?: 2.00
+    suspend fun saveActiveTrip(activeTrip: ActiveTripRecord) {
+        tripDao.saveActiveTrip(activeTrip)
     }
 
-    val speedThreshold: Flow<Double> = context.dataStore.data.map { preferences ->
-        preferences[KEY_SPEED_THRESHOLD] ?: 5.0
-    }
-
-    val audioEnabled: Flow<Boolean> = context.dataStore.data.map { preferences ->
-        preferences[KEY_AUDIO_ENABLED] ?: true
-    }
-
-    val autoStartEnabled: Flow<Boolean> = context.dataStore.data.map { preferences ->
-        preferences[KEY_AUTO_START_ENABLED] ?: false
-    }
-
-    val currency: Flow<String> = context.dataStore.data.map { preferences ->
-        preferences[KEY_CURRENCY] ?: "₹"
-    }
-
-    val outOfCitySurchargeType: Flow<String> = context.dataStore.data.map { preferences ->
-        preferences[KEY_OUT_OF_CITY_SURCHARGE_TYPE] ?: "FIXED_AMOUNT"
-    }
-
-    val outOfCitySurchargeFixedAmount: Flow<Double> = context.dataStore.data.map { preferences ->
-        preferences[KEY_OUT_OF_CITY_SURCHARGE_FIXED_AMOUNT] ?: 50.0
-    }
-
-    val outOfCitySurchargePercent: Flow<Double> = context.dataStore.data.map { preferences ->
-        preferences[KEY_OUT_OF_CITY_SURCHARGE_PERCENT] ?: 25.0
-    }
-
-    // Modern setter functions
-    suspend fun updateBaseFare(value: Double) {
-        context.dataStore.edit { preferences ->
-            preferences[KEY_BASE_FARE] = value
-        }
-    }
-
-    suspend fun updateFarePerKm(value: Double) {
-        context.dataStore.edit { preferences ->
-            preferences[KEY_FARE_PER_KM] = value
-        }
-    }
-
-    suspend fun updateWaitFarePerMin(value: Double) {
-        context.dataStore.edit { preferences ->
-            preferences[KEY_WAIT_FARE_PER_MIN] = value
-        }
-    }
-
-    suspend fun updateSpeedThreshold(value: Double) {
-        context.dataStore.edit { preferences ->
-            preferences[KEY_SPEED_THRESHOLD] = value
-        }
-    }
-
-    suspend fun updateAudioEnabled(value: Boolean) {
-        context.dataStore.edit { preferences ->
-            preferences[KEY_AUDIO_ENABLED] = value
-        }
-    }
-
-    suspend fun updateAutoStartEnabled(value: Boolean) {
-        context.dataStore.edit { preferences ->
-            preferences[KEY_AUTO_START_ENABLED] = value
-        }
-    }
-
-    suspend fun updateCurrency(value: String) {
-        context.dataStore.edit { preferences ->
-            preferences[KEY_CURRENCY] = value
-        }
-    }
-
-    suspend fun updateOutOfCitySurchargeType(value: String) {
-        context.dataStore.edit { preferences ->
-            preferences[KEY_OUT_OF_CITY_SURCHARGE_TYPE] = value
-        }
-    }
-
-    suspend fun updateOutOfCitySurchargeFixedAmount(value: Double) {
-        context.dataStore.edit { preferences ->
-            preferences[KEY_OUT_OF_CITY_SURCHARGE_FIXED_AMOUNT] = value
-        }
-    }
-
-    suspend fun updateOutOfCitySurchargePercent(value: Double) {
-        context.dataStore.edit { preferences ->
-            preferences[KEY_OUT_OF_CITY_SURCHARGE_PERCENT] = value
-        }
-    }
-
-    suspend fun updateIlaiyaraajaRingtone(value: String) {
-        context.dataStore.edit { preferences ->
-            preferences[KEY_ILAIYARAAJA_RINGTONE] = value
-        }
+    suspend fun clearActiveTrip() {
+        tripDao.clearActiveTrip()
     }
 }
